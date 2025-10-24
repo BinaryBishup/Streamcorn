@@ -63,6 +63,7 @@ export function ContentDetailsModal({ contentId, onClose }: ContentDetailsModalP
   const [recommendationContentIds, setRecommendationContentIds] = useState<Map<number, string>>(new Map());
   const [watchProgress, setWatchProgress] = useState<WatchProgress | null>(null);
   const [profileId, setProfileId] = useState<string | null>(null);
+  const [trailers, setTrailers] = useState<any[]>([]);
 
   useEffect(() => {
     loadContent();
@@ -83,14 +84,14 @@ export function ContentDetailsModal({ contentId, onClose }: ContentDetailsModalP
   }, [content, profileId]);
 
   useEffect(() => {
-    // Auto-play clip video after 2 seconds if clip exists
-    if (content?.clip && !showVideo) {
+    // Auto-play video after 2 seconds if clip or trailer exists
+    if ((content?.clip || trailers.length > 0) && !showVideo) {
       const timer = setTimeout(() => {
         setShowVideo(true);
       }, 2000);
       return () => clearTimeout(timer);
     }
-  }, [content?.clip, showVideo]);
+  }, [content?.clip, trailers, showVideo]);
 
   useEffect(() => {
     // Load episodes when season changes (for TV shows)
@@ -131,6 +132,18 @@ export function ContentDetailsModal({ contentId, onClose }: ContentDetailsModalP
         : await fetchMovieDetails(contentData.tmdb_id, true);
 
       setDetails(tmdbData);
+
+      // Extract trailers and videos from TMDB data
+      if (tmdbData && (tmdbData as any).videos?.results) {
+        const videos = (tmdbData as any).videos.results;
+        // Filter for trailers and teasers, prioritize YouTube
+        const youtubeVideos = videos.filter(
+          (video: any) =>
+            video.site === "YouTube" &&
+            (video.type === "Trailer" || video.type === "Teaser")
+        );
+        setTrailers(youtubeVideos);
+      }
 
       // Fetch logo
       const images = isTVContent
@@ -379,6 +392,27 @@ export function ContentDetailsModal({ contentId, onClose }: ContentDetailsModalP
                   loop
                   muted={isMuted}
                   playsInline
+                />
+                {/* Mute Button */}
+                <button
+                  onClick={() => setIsMuted(!isMuted)}
+                  className="absolute bottom-4 right-4 w-10 h-10 rounded-full bg-black/80 hover:bg-black flex items-center justify-center transition-colors border border-white/30 z-10"
+                >
+                  {isMuted ? (
+                    <VolumeX className="w-5 h-5 text-white" />
+                  ) : (
+                    <Volume2 className="w-5 h-5 text-white" />
+                  )}
+                </button>
+              </div>
+            ) : showVideo && trailers.length > 0 ? (
+              <div className="relative w-full h-full">
+                <iframe
+                  className="absolute inset-0 w-full h-full"
+                  src={`https://www.youtube.com/embed/${trailers[0].key}?autoplay=1&mute=${isMuted ? 1 : 0}&controls=0&modestbranding=1&rel=0&showinfo=0`}
+                  title={trailers[0].name}
+                  allow="autoplay; encrypted-media"
+                  allowFullScreen
                 />
                 {/* Mute Button */}
                 <button
@@ -744,10 +778,29 @@ export function ContentDetailsModal({ contentId, onClose }: ContentDetailsModalP
               <div className="flex gap-8 mb-8 border-b border-gray-800">
                 <button
                   onClick={() => setActiveTab("more-like-this")}
-                  className="pb-3 text-lg font-semibold transition-colors relative text-white"
+                  className={`pb-3 text-lg font-semibold transition-colors relative ${
+                    activeTab === "more-like-this"
+                      ? "text-white"
+                      : "text-gray-400 hover:text-gray-300"
+                  }`}
                 >
                   More Like This
-                  <div className="absolute bottom-0 left-0 right-0 h-1 bg-white rounded-t transition-all" />
+                  {activeTab === "more-like-this" && (
+                    <div className="absolute bottom-0 left-0 right-0 h-1 bg-white rounded-t" />
+                  )}
+                </button>
+                <button
+                  onClick={() => setActiveTab("trailers")}
+                  className={`pb-3 text-lg font-semibold transition-colors relative ${
+                    activeTab === "trailers"
+                      ? "text-white"
+                      : "text-gray-400 hover:text-gray-300"
+                  }`}
+                >
+                  Trailers & More
+                  {activeTab === "trailers" && (
+                    <div className="absolute bottom-0 left-0 right-0 h-1 bg-white rounded-t" />
+                  )}
                 </button>
               </div>
 
@@ -781,6 +834,34 @@ export function ContentDetailsModal({ contentId, onClose }: ContentDetailsModalP
                       </div>
                     );
                   })}
+                </div>
+              )}
+
+              {/* Trailers Tab */}
+              {activeTab === "trailers" && (
+                <div>
+                  {trailers.length > 0 ? (
+                    <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                      {trailers.map((trailer: any, index: number) => (
+                        <div
+                          key={trailer.id || index}
+                          className="relative aspect-video rounded-lg overflow-hidden bg-gray-900"
+                        >
+                          <iframe
+                            className="absolute inset-0 w-full h-full"
+                            src={`https://www.youtube.com/embed/${trailer.key}?rel=0&modestbranding=1&showinfo=0`}
+                            title={trailer.name}
+                            allow="accelerometer; autoplay; clipboard-write; encrypted-media; gyroscope; picture-in-picture"
+                            allowFullScreen
+                          />
+                        </div>
+                      ))}
+                    </div>
+                  ) : (
+                    <div className="text-center py-10">
+                      <p className="text-gray-400 text-lg">No trailers available for this content</p>
+                    </div>
+                  )}
                 </div>
               )}
             </div>
