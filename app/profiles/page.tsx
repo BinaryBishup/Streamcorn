@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
-import { Pencil, Plus, Sparkles } from "lucide-react";
+import { Pencil, Plus, Sparkles, Loader2 } from "lucide-react";
 import Image from "next/image";
 import {
   Dialog,
@@ -36,6 +36,8 @@ export default function ProfilesPage() {
   const [editName, setEditName] = useState("");
   const [editAvatar, setEditAvatar] = useState("");
   const [editIsKids, setEditIsKids] = useState(false);
+  const [isSaving, setIsSaving] = useState(false);
+  const [isCreating, setIsCreating] = useState(false);
   const router = useRouter();
   const supabase = createClient();
 
@@ -84,9 +86,10 @@ export default function ProfilesPage() {
   };
 
   const handleSaveProfile = async () => {
-    if (!selectedProfile) return;
+    if (!selectedProfile || isSaving) return;
 
     try {
+      setIsSaving(true);
       const { error } = await supabase
         .from("profiles")
         .update({
@@ -103,11 +106,16 @@ export default function ProfilesPage() {
     } catch (error) {
       console.error("Error updating profile:", error);
       alert("Failed to update profile");
+    } finally {
+      setIsSaving(false);
     }
   };
 
   const handleAddProfile = async () => {
+    if (isCreating) return;
+
     try {
+      setIsCreating(true);
       const {
         data: { user },
       } = await supabase.auth.getUser();
@@ -131,6 +139,8 @@ export default function ProfilesPage() {
     } catch (error) {
       console.error("Error creating profile:", error);
       alert("Failed to create profile");
+    } finally {
+      setIsCreating(false);
     }
   };
 
@@ -324,9 +334,16 @@ export default function ProfilesPage() {
             <Button
               onClick={handleSaveProfile}
               className="bg-red-600 hover:bg-red-700"
-              disabled={!editName.trim()}
+              disabled={!editName.trim() || isSaving}
             >
-              Save Changes
+              {isSaving ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Saving...
+                </>
+              ) : (
+                "Save Changes"
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
@@ -398,9 +415,16 @@ export default function ProfilesPage() {
             <Button
               onClick={handleAddProfile}
               className="bg-red-600 hover:bg-red-700"
-              disabled={!editName.trim()}
+              disabled={!editName.trim() || isCreating}
             >
-              Create Profile
+              {isCreating ? (
+                <>
+                  <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                  Creating...
+                </>
+              ) : (
+                "Create Profile"
+              )}
             </Button>
           </DialogFooter>
         </DialogContent>
