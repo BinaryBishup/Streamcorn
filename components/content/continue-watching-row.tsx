@@ -3,7 +3,8 @@
 import { useState, useRef, memo } from "react";
 import { ChevronLeft, ChevronRight, Play } from "lucide-react";
 import { Button } from "@/components/ui/button";
-import { fetchMovieDetails, fetchTVShowDetails, getTMDBImageUrl, fetchMovieImages, fetchTVShowImages } from "@/lib/tmdb";
+import { fetchMovieDetails, fetchTVShowDetails, getTMDBImageUrl, fetchMovieImages, fetchTVShowImages, fetchEpisodeDetails } from "@/lib/tmdb";
+import { createClient } from "@/lib/supabase/client";
 import { calculateProgress, type ContinueWatchingItem } from "@/lib/watch-progress";
 import Image from "next/image";
 import { useEffect } from "react";
@@ -18,6 +19,9 @@ interface ItemWithMetadata extends ContinueWatchingItem {
   posterPath: string | null;
   backdropPath: string | null;
   logoPath: string | null;
+  episodeTitle?: string;
+  watchedEpisodesCount?: number;
+  totalEpisodesCount?: number;
 }
 
 const ContinueWatchingRowComponent = ({ items, onItemClick }: ContinueWatchingRowProps) => {
@@ -34,6 +38,8 @@ const ContinueWatchingRowComponent = ({ items, onItemClick }: ContinueWatchingRo
   const loadMetadata = async () => {
     try {
       setLoading(true);
+      const supabase = createClient();
+
       const withMetadata = await Promise.all(
         items.map(async (item) => {
           const isTVContent = item.content.content_type === "tv" || item.content.content_type === "anime";
@@ -50,12 +56,52 @@ const ContinueWatchingRowComponent = ({ items, onItemClick }: ContinueWatchingRo
           const logo = images?.logos?.find(l => l.iso_639_1 === "en") || images?.logos?.[0];
           const logoPath = logo ? getTMDBImageUrl(logo.file_path, "w500") : null;
 
+          let episodeTitle: string | undefined;
+          let watchedEpisodesCount: number | undefined;
+          let totalEpisodesCount: number | undefined;
+
+          // For TV shows, fetch episode details and watched count
+          if (isTVContent && item.season_number && item.episode_number) {
+            // Fetch episode title from TMDB
+            const episodeData = await fetchEpisodeDetails(
+              item.content.tmdb_id,
+              item.season_number,
+              item.episode_number
+            );
+            episodeTitle = episodeData?.name;
+
+            // Get watched episodes count from database
+            const { count: watchedCount } = await supabase
+              .from("watched_episodes")
+              .select("*", { count: "exact", head: true })
+              .eq("profile_id", item.profile_id)
+              .eq("content_id", item.content.id);
+
+            watchedEpisodesCount = watchedCount || 0;
+
+            // Get total episodes count from database
+            const { count: totalCount } = await supabase
+              .from("episodes")
+              .select("*", { count: "exact", head: true })
+              .in("season_id",
+                supabase
+                  .from("seasons")
+                  .select("id")
+                  .eq("content_id", item.content.id)
+              );
+
+            totalEpisodesCount = totalCount || 0;
+          }
+
           return {
             ...item,
             title: isTVContent ? (tmdbData as any)?.name : (tmdbData as any)?.title,
             posterPath: getTMDBImageUrl(tmdbData?.poster_path || null, "w500"),
             backdropPath: getTMDBImageUrl(tmdbData?.backdrop_path || null, "w1280"),
             logoPath,
+            episodeTitle,
+            watchedEpisodesCount,
+            totalEpisodesCount,
           };
         })
       );
@@ -162,26 +208,41 @@ const ContinueWatchingRowComponent = ({ items, onItemClick }: ContinueWatchingRo
                   <div className="absolute inset-0 bg-gradient-to-t from-black/80 via-black/20 to-transparent" />
 
                   {/* Logo or Title at bottom left */}
-                  {item.logoPath ? (
-                    <div className="absolute bottom-4 left-4 w-32 h-12">
-                      <Image
-                        src={item.logoPath}
-                        alt={`${item.title} logo`}
-                        fill
-                        className="object-contain object-left"
-                      />
-                    </div>
-                  ) : (
-                    <h3 className="absolute bottom-4 left-4 text-white text-lg font-bold line-clamp-2 max-w-[80%]">
-                      {item.title}
-                    </h3>
-                  )}
+                  <div className="absolute bottom-4 left-4 right-4 flex flex-col gap-1">
+                    {item.logoPath ? (
+                      <div className="w-32 h-12">
+                        <Image
+                          src={item.logoPath}
+                          alt={`${item.title} logo`}
+                          fill
+                          className="object-contain object-left"
+                        />
+                      </div>
+                    ) : (
+                      <h3 className="text-white text-lg font-bold line-clamp-1 max-w-[80%]">
+                        {item.title}
+                      </h3>
+                    )}
+                    {/* Episode title for TV shows */}
+                    {item.episodeTitle && (
+                      <p className="text-white/80 text-sm line-clamp-1 max-w-[80%]">
+                        {item.episodeTitle}
+                      </p>
+                    )}
+                  </div>
 
-                  {/* Episode info */}
+                  {/* Episode info and progress */}
                   {progressText && (
-                    <p className="absolute bottom-4 right-4 text-white text-sm font-medium bg-black/60 px-2 py-1 rounded">
-                      {progressText}
-                    </p>
+                    <div className="absolute top-4 right-4 flex flex-col items-end gap-1">
+                      <p className="text-white text-sm font-medium bg-black/70 px-2 py-1 rounded backdrop-blur-sm">
+                        {progressText}
+                      </p>
+                      {item.watchedEpisodesCount !== undefined && item.totalEpisodesCount !== undefined && (
+                        <p className="text-white text-xs bg-black/70 px-2 py-1 rounded backdrop-blur-sm">
+                          {item.watchedEpisodesCount}/{item.totalEpisodesCount} watched
+                        </p>
+                      )}
+                    </div>
                   )}
 
                   {/* Play overlay on hover */}
