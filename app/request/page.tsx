@@ -130,9 +130,14 @@ function RequestPageContent() {
 
   const loadAllRequests = async () => {
     try {
+      const selectedProfile = localStorage.getItem("selectedProfile");
+      if (!selectedProfile) return;
+
+      // Load only requests for the current profile
       const { data, error } = await supabase
         .from("requests")
         .select("*")
+        .eq("profile_id", selectedProfile)
         .order("created_at", { ascending: false });
 
       if (error) throw error;
@@ -155,10 +160,12 @@ function RequestPageContent() {
         .select("id, tmdb_id, content_type")
         .in("tmdb_id", tmdbIds);
 
-      // Check which are already requested
+      // Check which are already requested by current profile
+      const selectedProfile = localStorage.getItem("selectedProfile");
       const { data: existingRequests } = await supabase
         .from("requests")
         .select("tmdb_id, content_type")
+        .eq("profile_id", selectedProfile)
         .in("tmdb_id", tmdbIds);
 
       // Create lookup maps

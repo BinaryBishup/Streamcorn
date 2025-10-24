@@ -40,7 +40,9 @@ const ContentCardHoverComponent = ({
   const [isVideoReady, setIsVideoReady] = useState(false);
   const [seasons, setSeasons] = useState<number>(0);
   const [episodes, setEpisodes] = useState<number>(0);
+  const [position, setPosition] = useState<"left" | "center" | "right">("center");
   const videoRef = useRef<HTMLVideoElement>(null);
+  const cardRef = useRef<HTMLDivElement>(null);
   const supabase = createClient();
 
   useEffect(() => {
@@ -133,6 +135,24 @@ const ContentCardHoverComponent = ({
   };
 
   const handleMouseEnter = () => {
+    // Detect position on hover
+    if (cardRef.current) {
+      const rect = cardRef.current.getBoundingClientRect();
+      const windowWidth = window.innerWidth;
+      const cardCenter = rect.left + rect.width / 2;
+
+      // Determine if card is on left, center, or right edge
+      // Left edge: within first 20% of screen
+      // Right edge: within last 20% of screen
+      if (cardCenter < windowWidth * 0.2) {
+        setPosition("left");
+      } else if (cardCenter > windowWidth * 0.8) {
+        setPosition("right");
+      } else {
+        setPosition("center");
+      }
+    }
+
     const timeout = setTimeout(() => {
       setIsHovered(true);
     }, 300);
@@ -180,8 +200,15 @@ const ContentCardHoverComponent = ({
 
   return (
     <div
+      ref={cardRef}
       className={`relative transition-all duration-300 ease-in-out ${
         isHovered ? "scale-[1.3] z-50 mx-8" : "scale-100 z-10"
+      } ${
+        position === "left"
+          ? "origin-left"
+          : position === "right"
+          ? "origin-right"
+          : "origin-center"
       }`}
       onMouseEnter={handleMouseEnter}
       onMouseLeave={handleMouseLeave}
@@ -208,7 +235,15 @@ const ContentCardHoverComponent = ({
 
       {/* Hover Expansion */}
       {isHovered && (
-        <div className="absolute top-0 left-1/2 -translate-x-1/2 w-full min-w-[320px] max-w-[340px] bg-[#181818] rounded-lg shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 cursor-pointer">
+        <div
+          className={`absolute top-0 w-full min-w-[320px] max-w-[340px] bg-[#181818] rounded-lg shadow-2xl overflow-hidden animate-in fade-in zoom-in-95 duration-200 cursor-pointer ${
+            position === "left"
+              ? "left-0 origin-left"
+              : position === "right"
+              ? "right-0 origin-right"
+              : "left-1/2 -translate-x-1/2 origin-center"
+          }`}
+        >
           {/* Video/Backdrop */}
           <div className="relative w-full aspect-[16/10]">
             {videoUrl && clipUrl ? (
