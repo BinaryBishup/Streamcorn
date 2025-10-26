@@ -2,6 +2,31 @@ const TMDB_API_KEY = process.env.NEXT_PUBLIC_TMDB_API_KEY;
 const TMDB_BASE_URL = process.env.NEXT_PUBLIC_TMDB_BASE_URL || "https://api.themoviedb.org/3";
 const TMDB_IMAGE_BASE_URL = process.env.NEXT_PUBLIC_TMDB_IMAGE_BASE_URL || "https://image.tmdb.org/t/p";
 
+// In-memory cache for TMDB API responses
+const tmdbCache = new Map<string, { data: any; timestamp: number }>();
+const CACHE_DURATION = 60 * 60 * 1000; // 1 hour in milliseconds
+
+/**
+ * Get cached data or fetch from TMDB
+ */
+function getCachedOrFetch<T>(
+  cacheKey: string,
+  fetchFn: () => Promise<T>,
+  cacheDuration: number = CACHE_DURATION
+): Promise<T> {
+  const cached = tmdbCache.get(cacheKey);
+  const now = Date.now();
+
+  if (cached && now - cached.timestamp < cacheDuration) {
+    return Promise.resolve(cached.data);
+  }
+
+  return fetchFn().then((data) => {
+    tmdbCache.set(cacheKey, { data, timestamp: now });
+    return data;
+  });
+}
+
 // TMDB Genre IDs
 export const MOVIE_GENRES = {
   ACTION: 28,
@@ -111,49 +136,57 @@ export function getTMDBImageUrl(path: string | null, size: "original" | "w500" |
 }
 
 /**
- * Fetch movie details from TMDB
+ * Fetch movie details from TMDB (with caching)
  */
 export async function fetchMovieDetails(tmdbId: number, includeVideos: boolean = false): Promise<TMDBMovie | null> {
-  try {
-    const appendParam = includeVideos ? '&append_to_response=videos' : '';
-    const response = await fetch(
-      `${TMDB_BASE_URL}/movie/${tmdbId}?api_key=${TMDB_API_KEY}&language=en-US${appendParam}`,
-      { next: { revalidate: 86400 } } // Cache for 24 hours
-    );
+  const cacheKey = `movie:${tmdbId}:${includeVideos}`;
 
-    if (!response.ok) {
-      console.error(`Failed to fetch movie ${tmdbId}:`, response.statusText);
+  return getCachedOrFetch(cacheKey, async () => {
+    try {
+      const appendParam = includeVideos ? '&append_to_response=videos' : '';
+      const response = await fetch(
+        `${TMDB_BASE_URL}/movie/${tmdbId}?api_key=${TMDB_API_KEY}&language=en-US${appendParam}`,
+        { next: { revalidate: 86400 } }
+      );
+
+      if (!response.ok) {
+        console.error(`Failed to fetch movie ${tmdbId}:`, response.statusText);
+        return null;
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error(`Error fetching movie ${tmdbId}:`, error);
       return null;
     }
-
-    return await response.json();
-  } catch (error) {
-    console.error(`Error fetching movie ${tmdbId}:`, error);
-    return null;
-  }
+  });
 }
 
 /**
- * Fetch TV show details from TMDB
+ * Fetch TV show details from TMDB (with caching)
  */
 export async function fetchTVShowDetails(tmdbId: number, includeVideos: boolean = false): Promise<TMDBTVShow | null> {
-  try {
-    const appendParam = includeVideos ? '&append_to_response=videos' : '';
-    const response = await fetch(
-      `${TMDB_BASE_URL}/tv/${tmdbId}?api_key=${TMDB_API_KEY}&language=en-US${appendParam}`,
-      { next: { revalidate: 86400 } }
-    );
+  const cacheKey = `tv:${tmdbId}:${includeVideos}`;
 
-    if (!response.ok) {
-      console.error(`Failed to fetch TV show ${tmdbId}:`, response.statusText);
+  return getCachedOrFetch(cacheKey, async () => {
+    try {
+      const appendParam = includeVideos ? '&append_to_response=videos' : '';
+      const response = await fetch(
+        `${TMDB_BASE_URL}/tv/${tmdbId}?api_key=${TMDB_API_KEY}&language=en-US${appendParam}`,
+        { next: { revalidate: 86400 } }
+      );
+
+      if (!response.ok) {
+        console.error(`Failed to fetch TV show ${tmdbId}:`, response.statusText);
+        return null;
+      }
+
+      return await response.json();
+    } catch (error) {
+      console.error(`Error fetching TV show ${tmdbId}:`, error);
       return null;
     }
-
-    return await response.json();
-  } catch (error) {
-    console.error(`Error fetching TV show ${tmdbId}:`, error);
-    return null;
-  }
+  });
 }
 
 /**
@@ -470,4 +503,71 @@ export async function fetchTVShowVideos(tmdbId: number): Promise<{
     console.error(`Error fetching TV show videos ${tmdbId}:`, error);
     return null;
   }
+}
+
+/**
+ * Batch fetch multiple movies in parallel (PERFORMANCE OPTIMIZED)
+ */
+export async function fetchMultipleMovies(
+  tmdbIds: number[],
+  includeVideos: boolean = false
+): Promise<Map<number, TMDBMovie>> {
+  const results = new Map<number, TMDBMovie>();
+
+  // Fetch all movies in parallel
+  const promises = tmdbIds.map(async (id) => {
+    const movie = await fetchMovieDetails(id, includeVideos);
+    if (movie) {
+      results.set(id, movie);
+    }
+  });
+
+  await Promise.all(promises);
+  return results;
+}
+
+/**
+ * Batch fetch multiple TV shows in parallel (PERFORMANCE OPTIMIZED)
+ */
+export async function fetchMultipleTVShows(
+  tmdbIds: number[],
+  includeVideos: boolean = false
+): Promise<Map<number, TMDBTVShow>> {
+  const results = new Map<number, TMDBTVShow>();
+
+  // Fetch all TV shows in parallel
+  const promises = tmdbIds.map(async (id) => {
+    const show = await fetchTVShowDetails(id, includeVideos);
+    if (show) {
+      results.set(id, show);
+    }
+  });
+
+  await Promise.all(promises);
+  return results;
+}
+
+/**
+ * Batch fetch mixed content (movies and TV shows) in parallel (PERFORMANCE OPTIMIZED)
+ */
+export async function fetchMultipleContent(
+  items: Array<{ tmdbId: number; type: 'movie' | 'tv' | 'anime' }>,
+  includeVideos: boolean = false
+): Promise<Map<number, TMDBMovie | TMDBTVShow>> {
+  const results = new Map<number, TMDBMovie | TMDBTVShow>();
+
+  // Fetch all content in parallel
+  const promises = items.map(async (item) => {
+    const isTVContent = item.type === 'tv' || item.type === 'anime';
+    const data = isTVContent
+      ? await fetchTVShowDetails(item.tmdbId, includeVideos)
+      : await fetchMovieDetails(item.tmdbId, includeVideos);
+
+    if (data) {
+      results.set(item.tmdbId, data);
+    }
+  });
+
+  await Promise.all(promises);
+  return results;
 }

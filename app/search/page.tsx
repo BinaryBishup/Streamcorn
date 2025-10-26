@@ -172,7 +172,7 @@ function SearchPageContent() {
               tmdbId: content.tmdb_id,
               title: tmdbData.title || tmdbData.name || "",
               posterPath: getTMDBImageUrl(tmdbData.poster_path, "w500"),
-              backdropPath: getTMDBImageUrl(tmdbData.backdrop_path, "w1280"),
+              backdropPath: getTMDBImageUrl(tmdbData.backdrop_path, "w780"),
               rating: tmdbData.vote_average || 0,
               type: content.content_type,
             } as ContentWithMetadata;

@@ -80,17 +80,24 @@ const ContinueWatchingRowComponent = ({ items, onItemClick }: ContinueWatchingRo
             watchedEpisodesCount = watchedCount || 0;
 
             // Get total episodes count from database
-            const { count: totalCount } = await supabase
-              .from("episodes")
-              .select("*", { count: "exact", head: true })
-              .in("season_id",
-                supabase
-                  .from("seasons")
-                  .select("id")
-                  .eq("content_id", item.content.id)
-              );
+            // First fetch season IDs, then count episodes
+            const { data: seasons } = await supabase
+              .from("seasons")
+              .select("id")
+              .eq("content_id", item.content.id);
 
-            totalEpisodesCount = totalCount || 0;
+            if (seasons && seasons.length > 0) {
+              const seasonIds = seasons.map(s => s.id);
+
+              const { count: totalCount } = await supabase
+                .from("episodes")
+                .select("*", { count: "exact", head: true })
+                .in("season_id", seasonIds);
+
+              totalEpisodesCount = totalCount || 0;
+            } else {
+              totalEpisodesCount = 0;
+            }
           }
 
           return {

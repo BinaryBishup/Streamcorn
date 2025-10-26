@@ -9,7 +9,7 @@ import { FeaturedSlider } from "@/components/content/featured-slider";
 import { ContentRow } from "@/components/content/content-row";
 import { SkeletonLoader } from "@/components/ui/skeleton-loader";
 import { ContinueWatchingRow } from "@/components/content/continue-watching-row";
-import { fetchMovieDetails, fetchTVShowDetails, getTMDBImageUrl } from "@/lib/tmdb";
+import { fetchMovieDetails, fetchTVShowDetails, getTMDBImageUrl, fetchMultipleContent } from "@/lib/tmdb";
 import { getContinueWatching, type ContinueWatchingItem } from "@/lib/watch-progress";
 
 // Lazy load the modal since it's not needed on initial page load
@@ -138,28 +138,32 @@ function HomePageContent() {
       if (error) throw error;
 
       if (data && data.length > 0) {
-        const itemsWithMetadata = await Promise.all(
-          data.map(async (content: Content) => {
-            const isTVContent = content.content_type === "tv" || content.content_type === "anime";
-            const tmdbData = isTVContent
-              ? await fetchTVShowDetails(content.tmdb_id, true)
-              : await fetchMovieDetails(content.tmdb_id, true);
+        // PERFORMANCE: Batch fetch all TMDB data in parallel
+        const contentItems = data.map(c => ({
+          tmdbId: c.tmdb_id,
+          type: c.content_type as 'movie' | 'tv' | 'anime'
+        }));
 
-            return {
-              id: content.id,
-              tmdbId: content.tmdb_id,
-              title: isTVContent
-                ? (tmdbData as any)?.name || `${content.content_type} ${content.tmdb_id}`
-                : (tmdbData as any)?.title || `Movie ${content.tmdb_id}`,
-              overview: tmdbData?.overview,
-              posterPath: getTMDBImageUrl(tmdbData?.poster_path || null, "w500"),
-              backdropPath: getTMDBImageUrl(tmdbData?.backdrop_path || null, "w1280"),
-              rating: tmdbData?.vote_average || 0,
-              type: content.content_type,
-              trailerKey: tmdbData?.videos?.results?.find(v => v.type === "Trailer" && v.site === "YouTube")?.key,
-            };
-          })
-        );
+        const tmdbDataMap = await fetchMultipleContent(contentItems, true);
+
+        const itemsWithMetadata = data.map((content: Content) => {
+          const tmdbData = tmdbDataMap.get(content.tmdb_id);
+          const isTVContent = content.content_type === "tv" || content.content_type === "anime";
+
+          return {
+            id: content.id,
+            tmdbId: content.tmdb_id,
+            title: isTVContent
+              ? (tmdbData as any)?.name || `${content.content_type} ${content.tmdb_id}`
+              : (tmdbData as any)?.title || `Movie ${content.tmdb_id}`,
+            overview: tmdbData?.overview,
+            posterPath: getTMDBImageUrl(tmdbData?.poster_path || null, "w500"),
+            backdropPath: getTMDBImageUrl(tmdbData?.backdrop_path || null, "w780"),
+            rating: tmdbData?.vote_average || 0,
+            type: content.content_type,
+            trailerKey: tmdbData?.videos?.results?.find(v => v.type === "Trailer" && v.site === "YouTube")?.key,
+          };
+        });
 
         setFeaturedItems(itemsWithMetadata);
       }
@@ -216,26 +220,30 @@ function HomePageContent() {
       if (error) throw error;
 
       if (data && data.length > 0) {
-        const itemsWithMetadata = await Promise.all(
-          data.map(async (content: Content) => {
-            const isTVContent = content.content_type === "tv" || content.content_type === "anime";
-            const tmdbData = isTVContent
-              ? await fetchTVShowDetails(content.tmdb_id)
-              : await fetchMovieDetails(content.tmdb_id);
+        // PERFORMANCE: Batch fetch all TMDB data in parallel
+        const contentItems = data.map(c => ({
+          tmdbId: c.tmdb_id,
+          type: c.content_type as 'movie' | 'tv' | 'anime'
+        }));
 
-            return {
-              id: content.id,
-              tmdbId: content.tmdb_id,
-              title: isTVContent
-                ? (tmdbData as any)?.name || `${content.content_type} ${content.tmdb_id}`
-                : (tmdbData as any)?.title || `Movie ${content.tmdb_id}`,
-              posterPath: getTMDBImageUrl(tmdbData?.poster_path || null, "w500"),
-              backdropPath: getTMDBImageUrl(tmdbData?.backdrop_path || null, "w1280"),
-              rating: tmdbData?.vote_average || 0,
-              type: content.content_type,
-            };
-          })
-        );
+        const tmdbDataMap = await fetchMultipleContent(contentItems, false);
+
+        const itemsWithMetadata = data.map((content: Content) => {
+          const tmdbData = tmdbDataMap.get(content.tmdb_id);
+          const isTVContent = content.content_type === "tv" || content.content_type === "anime";
+
+          return {
+            id: content.id,
+            tmdbId: content.tmdb_id,
+            title: isTVContent
+              ? (tmdbData as any)?.name || `${content.content_type} ${content.tmdb_id}`
+              : (tmdbData as any)?.title || `Movie ${content.tmdb_id}`,
+            posterPath: getTMDBImageUrl(tmdbData?.poster_path || null, "w500"),
+            backdropPath: getTMDBImageUrl(tmdbData?.backdrop_path || null, "w780"),
+            rating: tmdbData?.vote_average || 0,
+            type: content.content_type,
+          };
+        });
 
         return itemsWithMetadata;
       }

@@ -1,9 +1,9 @@
 "use client";
 
-import { useEffect, useState } from "react";
+import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { X, Play, Plus, Volume2, VolumeX } from "lucide-react";
+import { X, Play, Plus, Volume2, VolumeX, Check } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ModalSkeletonLoader } from "@/components/ui/skeleton-loader";
 import {
@@ -64,17 +64,22 @@ export function ContentDetailsModal({ contentId, onClose }: ContentDetailsModalP
   const [watchProgress, setWatchProgress] = useState<WatchProgress | null>(null);
   const [profileId, setProfileId] = useState<string | null>(null);
   const [trailers, setTrailers] = useState<any[]>([]);
+  const [episodeProgress, setEpisodeProgress] = useState<Map<string, number>>(new Map());
+
+  const videoRef = useRef<HTMLVideoElement>(null);
+  const videoContainerRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     loadContent();
   }, [contentId]);
 
+  // PERFORMANCE: Don't load recommendations/cast until user clicks the tab
   useEffect(() => {
-    // Load recommendations and cast after modal is displayed
-    if (!loading && content && details) {
+    // Load recommendations and cast only when "more-like-this" tab is active
+    if (!loading && content && details && activeTab === "more-like-this" && recommendations.length === 0) {
       loadRecommendationsAndCast();
     }
-  }, [loading, content, details]);
+  }, [activeTab, loading, content, details]);
 
   useEffect(() => {
     // Load watch progress after content is loaded
@@ -83,15 +88,43 @@ export function ContentDetailsModal({ contentId, onClose }: ContentDetailsModalP
     }
   }, [content, profileId]);
 
+  // PERFORMANCE: Increase autoplay delay to 3 seconds to prioritize content loading
   useEffect(() => {
-    // Auto-play video after 2 seconds if clip or trailer exists
+    // Auto-play video after 3 seconds if clip or trailer exists
     if ((content?.clip || trailers.length > 0) && !showVideo) {
       const timer = setTimeout(() => {
         setShowVideo(true);
-      }, 2000);
+      }, 3000);
       return () => clearTimeout(timer);
     }
   }, [content?.clip, trailers, showVideo]);
+
+  useEffect(() => {
+    // Pause video when not in view using Intersection Observer
+    if (!videoContainerRef.current) return;
+
+    const observer = new IntersectionObserver(
+      (entries) => {
+        entries.forEach((entry) => {
+          if (videoRef.current) {
+            if (!entry.isIntersecting) {
+              // Video is not in view, pause it
+              videoRef.current.pause();
+            }
+          }
+        });
+      },
+      {
+        threshold: 0.5, // Trigger when 50% of video is out of view
+      }
+    );
+
+    observer.observe(videoContainerRef.current);
+
+    return () => {
+      observer.disconnect();
+    };
+  }, [showVideo]);
 
   useEffect(() => {
     // Load episodes when season changes (for TV shows)
@@ -227,8 +260,78 @@ export function ContentDetailsModal({ contentId, onClose }: ContentDetailsModalP
     try {
       const progress = await getWatchProgress(content.id, profileId);
       setWatchProgress(progress);
+
+      // Also load watched episodes for TV content
+      const isTVContent = content.content_type === "tv" || content.content_type === "anime";
+      if (isTVContent) {
+        await loadWatchedEpisodes();
+      }
     } catch (error) {
       console.error("Error loading watch progress:", error);
+    }
+  };
+
+  const loadWatchedEpisodes = async () => {
+    if (!content || !profileId) return;
+
+    try {
+      // Get all episode progress from new hybrid schema
+      const progressMap = new Map<string, number>();
+
+      // Get episode progress from continue_watching table with new JSONB structure
+      const { data: continueWatchingData, error: cwError } = await supabase
+        .from("continue_watching")
+        .select("episodes_progress, current_season, current_episode, current_position, duration")
+        .eq("profile_id", profileId)
+        .eq("content_id", content.tmdb_id)
+        .eq("content_type", content.content_type)
+        .maybeSingle();
+
+      if (!cwError && continueWatchingData) {
+        // Parse JSONB episodes_progress {"s01e01": 120, "s01e02": 456}
+        const episodesProgress = continueWatchingData.episodes_progress || {};
+
+        for (const key of Object.keys(episodesProgress)) {
+          // Convert s01e01 to S1E1 format for display
+          const match = key.match(/s(\d+)e(\d+)/);
+          if (match) {
+            const seasonNum = parseInt(match[1]);
+            const epNum = parseInt(match[2]);
+            const episodeKey = `S${seasonNum}E${epNum}`;
+
+            // Mark as in-progress (we show actual percentage for current episode)
+            progressMap.set(episodeKey, 50);
+          }
+        }
+
+        // Add current episode with actual progress percentage
+        if (continueWatchingData.current_season && continueWatchingData.current_episode && continueWatchingData.current_position && continueWatchingData.duration) {
+          const episodeKey = `S${continueWatchingData.current_season}E${continueWatchingData.current_episode}`;
+          const progress = calculateProgress(continueWatchingData.current_position, continueWatchingData.duration);
+          progressMap.set(episodeKey, progress);
+        }
+      }
+
+      // Mark completed episodes as 100%
+      const { data, error } = await supabase
+        .from("watched_episodes")
+        .select("season_number, episode_number")
+        .eq("profile_id", profileId)
+        .eq("content_id", content.id);
+
+      if (error) throw error;
+
+      if (data) {
+        data.forEach(ep => {
+          const episodeKey = `S${ep.season_number}E${ep.episode_number}`;
+          // Set to 100% for completed episodes
+          progressMap.set(episodeKey, 100);
+        });
+      }
+
+      setEpisodeProgress(progressMap);
+    } catch (error) {
+      console.error("Error loading episode progress:", error);
     }
   };
 
@@ -289,13 +392,18 @@ export function ContentDetailsModal({ contentId, onClose }: ContentDetailsModalP
       return { text: "Watch Now", icon: Play };
     }
 
-    const isCompleted = isContentCompleted(watchProgress.last_position, watchProgress.duration);
+    // Use new hybrid schema fields (current_season, current_episode)
+    const currentSeason = watchProgress.current_season || watchProgress.season_number;
+    const currentEpisode = watchProgress.current_episode || watchProgress.episode_number;
+    const currentPosition = watchProgress.current_position || watchProgress.last_position;
+
+    const isCompleted = isContentCompleted(currentPosition, watchProgress.duration);
     const isTVContent = content?.content_type === "tv" || content?.content_type === "anime";
 
     if (isTVContent) {
-      if (isCompleted && watchProgress.season_number && watchProgress.episode_number) {
+      if (isCompleted && currentSeason && currentEpisode) {
         // Find next episode
-        const nextEp = findNextEpisode(watchProgress.season_number, watchProgress.episode_number);
+        const nextEp = findNextEpisode(currentSeason, currentEpisode);
         if (nextEp) {
           return {
             text: `Play S${nextEp.season}:E${nextEp.episode}`,
@@ -303,15 +411,24 @@ export function ContentDetailsModal({ contentId, onClose }: ContentDetailsModalP
           };
         }
       }
+
+      // Show episode info in Resume button
+      if (currentPosition > 0 && currentSeason && currentEpisode) {
+        return {
+          text: `Resume S${currentSeason} E${currentEpisode}`,
+          icon: Play,
+        };
+      }
+
       return {
-        text: watchProgress.last_position > 0 ? "Resume" : "Watch Now",
+        text: "Watch Now",
         icon: Play,
       };
     }
 
     // For movies
     return {
-      text: watchProgress.last_position > 0 && !isCompleted ? "Resume" : "Watch Now",
+      text: currentPosition > 0 && !isCompleted ? "Resume" : "Watch Now",
       icon: Play,
     };
   };
@@ -340,6 +457,68 @@ export function ContentDetailsModal({ contentId, onClose }: ContentDetailsModalP
     const newUrl = searchParams.toString() ? `${currentPath}?${searchParams.toString()}` : currentPath;
     router.push(newUrl, { scroll: false });
     onClose();
+  };
+
+  const handlePlayContent = () => {
+    if (!content || !profileId) return;
+
+    const isTVContent = content.content_type === "tv" || content.content_type === "anime";
+
+    // Build URL parameters
+    const params = new URLSearchParams({
+      profile_id: profileId,
+      content_id: content.id,
+    });
+
+    // For TV shows, determine which episode to play
+    if (isTVContent) {
+      // Use new hybrid schema fields (current_season, current_episode) with fallback to legacy fields
+      const currentSeason = watchProgress?.current_season || watchProgress?.season_number;
+      const currentEpisode = watchProgress?.current_episode || watchProgress?.episode_number;
+      const currentPosition = watchProgress?.current_position || watchProgress?.last_position || 0;
+
+      if (currentSeason && currentEpisode) {
+        // Check if current episode is completed
+        const isCompleted = isContentCompleted(currentPosition, watchProgress?.duration || 0);
+
+        if (isCompleted) {
+          // Find next episode
+          const nextEp = findNextEpisode(currentSeason, currentEpisode);
+          if (nextEp) {
+            params.append("season_number", nextEp.season.toString());
+            params.append("episode_number", nextEp.episode.toString());
+          } else {
+            // No next episode, start from current
+            params.append("season_number", currentSeason.toString());
+            params.append("episode_number", currentEpisode.toString());
+          }
+        } else {
+          // Continue current episode
+          params.append("season_number", currentSeason.toString());
+          params.append("episode_number", currentEpisode.toString());
+        }
+      } else {
+        // Start from S1E1
+        params.append("season_number", "1");
+        params.append("episode_number", "1");
+      }
+    }
+
+    router.push(`/player?${params.toString()}`);
+  };
+
+  const handlePlayEpisode = (seasonNumber: number, episodeNumber: number, episodeId: string) => {
+    if (!content || !profileId) return;
+
+    const params = new URLSearchParams({
+      profile_id: profileId,
+      content_id: content.id,
+      episode_id: episodeId,
+      season_number: seasonNumber.toString(),
+      episode_number: episodeNumber.toString(),
+    });
+
+    router.push(`/player?${params.toString()}`);
   };
 
   if (loading) {
@@ -382,10 +561,11 @@ export function ContentDetailsModal({ contentId, onClose }: ContentDetailsModalP
           </button>
 
           {/* Hero Section */}
-          <div className="relative w-full aspect-video">
+          <div ref={videoContainerRef} className="relative w-full aspect-video">
             {showVideo && content?.clip ? (
               <div className="relative w-full h-full">
                 <video
+                  ref={videoRef}
                   className="absolute inset-0 w-full h-full object-cover"
                   src={content.clip}
                   autoPlay
@@ -467,10 +647,31 @@ export function ContentDetailsModal({ contentId, onClose }: ContentDetailsModalP
 
                 {/* Right: Action Buttons */}
                 <div className="flex items-center gap-3 flex-shrink-0">
-                  <Button className="bg-white hover:bg-gray-200 text-black font-semibold px-8 py-6 text-base md:text-lg rounded-md">
-                    <Play className="w-5 h-5 md:w-6 md:h-6 mr-2" fill="currentColor" />
-                    {getWatchButtonInfo().text}
-                  </Button>
+                  <div className="relative">
+                    <Button
+                      onClick={handlePlayContent}
+                      className="bg-white hover:bg-gray-200 text-black font-semibold px-8 py-6 text-base md:text-lg rounded-md overflow-hidden"
+                    >
+                      <Play className="w-5 h-5 md:w-6 md:h-6 mr-2" fill="currentColor" />
+                      {getWatchButtonInfo().text}
+                      {/* Progress bar integrated into button */}
+                      {watchProgress && watchProgress.duration > 0 && (
+                        (() => {
+                          const position = watchProgress.current_position || watchProgress.last_position || 0;
+                          return position > 0 ? (
+                            <div className="absolute bottom-0 left-0 right-0 h-1 bg-gray-300">
+                              <div
+                                className="h-full bg-red-600"
+                                style={{
+                                  width: `${calculateProgress(position, watchProgress.duration)}%`,
+                                }}
+                              />
+                            </div>
+                          ) : null;
+                        })()
+                      )}
+                    </Button>
+                  </div>
                   <Button
                     variant="outline"
                     className="bg-white/10 hover:bg-white/20 text-white border-white/30 font-semibold p-3 rounded-full"
@@ -479,20 +680,6 @@ export function ContentDetailsModal({ contentId, onClose }: ContentDetailsModalP
                   </Button>
                 </div>
               </div>
-
-              {/* Progress Bar */}
-              {watchProgress && watchProgress.duration > 0 && watchProgress.last_position > 0 && (
-                <div>
-                  <div className="w-full h-1 bg-gray-700 rounded-full overflow-hidden">
-                    <div
-                      className="h-full bg-red-600"
-                      style={{
-                        width: `${calculateProgress(watchProgress.last_position, watchProgress.duration)}%`,
-                      }}
-                    />
-                  </div>
-                </div>
-              )}
             </div>
           </div>
 
@@ -566,58 +753,84 @@ export function ContentDetailsModal({ contentId, onClose }: ContentDetailsModalP
 
                   {/* Episodes List */}
                   <div className="space-y-4">
-                    {episodes.map((episode, index) => (
-                      <div
-                        key={episode.id}
-                        className="flex gap-4 bg-gray-900/50 rounded-lg overflow-hidden hover:bg-gray-900/70 transition-colors cursor-pointer"
-                      >
-                        {/* Episode Thumbnail */}
-                        <div className="relative w-40 md:w-60 flex-shrink-0 aspect-video">
-                          {episode.still_path ? (
-                            <Image
-                              src={getTMDBImageUrl(episode.still_path, "w500")}
-                              alt={episode.name}
-                              fill
-                              className="object-cover"
-                            />
-                          ) : (
-                            <div className="w-full h-full bg-gray-800 flex items-center justify-center">
-                              <span className="text-gray-500 text-sm">No image</span>
-                            </div>
-                          )}
-                          {/* Play Button Overlay */}
-                          <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 hover:opacity-100 transition-opacity">
-                            <div className="w-12 h-12 rounded-full bg-white/30 flex items-center justify-center">
-                              <Play className="w-6 h-6 text-white ml-1" fill="currentColor" />
-                            </div>
-                          </div>
-                        </div>
+                    {episodes.map((episode, index) => {
+                      const episodeKey = `S${selectedSeason}E${episode.episode_number}`;
+                      const progress = episodeProgress.get(episodeKey) || 0;
+                      const isFullyWatched = progress === 100;
+                      const hasProgress = progress > 0 && progress < 100;
 
-                        {/* Episode Info */}
-                        <div className="flex-1 py-4 pr-4">
-                          <div className="flex items-start justify-between mb-2">
-                            <h3 className="text-white font-semibold text-base">
-                              {episode.episode_number}. {episode.name}
-                            </h3>
-                            {episode.runtime && (
-                              <span className="text-gray-400 text-sm whitespace-nowrap ml-4">{episode.runtime}m</span>
+                      return (
+                        <div
+                          key={episode.id}
+                          onClick={() => handlePlayEpisode(selectedSeason, episode.episode_number, String(episode.id))}
+                          className="flex gap-4 bg-gray-900/50 rounded-lg overflow-hidden hover:bg-gray-900/70 transition-colors cursor-pointer"
+                        >
+                          {/* Episode Thumbnail */}
+                          <div className="relative w-40 md:w-60 flex-shrink-0 aspect-video">
+                            {episode.still_path ? (
+                              <Image
+                                src={getTMDBImageUrl(episode.still_path, "w500")}
+                                alt={episode.name}
+                                fill
+                                className="object-cover"
+                              />
+                            ) : (
+                              <div className="w-full h-full bg-gray-800 flex items-center justify-center">
+                                <span className="text-gray-500 text-sm">No image</span>
+                              </div>
+                            )}
+
+                            {/* Play Button Overlay */}
+                            <div className="absolute inset-0 flex items-center justify-center bg-black/40 opacity-0 hover:opacity-100 transition-opacity">
+                              <div className="w-12 h-12 rounded-full bg-white/30 flex items-center justify-center">
+                                <Play className="w-6 h-6 text-white ml-1" fill="currentColor" />
+                              </div>
+                            </div>
+
+                            {/* Progress bar for in-progress episodes */}
+                            {hasProgress && (
+                              <div className="absolute bottom-0 left-0 right-0 h-1 bg-gray-700">
+                                <div
+                                  className="h-full bg-red-600"
+                                  style={{ width: `${progress}%` }}
+                                />
+                              </div>
                             )}
                           </div>
-                          {episode.air_date && (
-                            <p className="text-gray-400 text-sm mb-2">
-                              {new Date(episode.air_date).toLocaleDateString('en-US', {
-                                day: 'numeric',
-                                month: 'short',
-                                year: 'numeric'
-                              })}
+
+                          {/* Episode Info */}
+                          <div className="flex-1 py-4 pr-4">
+                            <div className="flex items-start justify-between mb-2">
+                              <div className="flex items-center gap-2">
+                                <h3 className="text-white font-semibold text-base">
+                                  {episode.episode_number}. {episode.name}
+                                </h3>
+                                {isFullyWatched && (
+                                  <span className="text-xs px-2 py-0.5 bg-red-600/20 text-red-500 rounded font-medium border border-red-600/30">
+                                    Complete
+                                  </span>
+                                )}
+                              </div>
+                              {episode.runtime && (
+                                <span className="text-gray-400 text-sm whitespace-nowrap ml-4">{episode.runtime}m</span>
+                              )}
+                            </div>
+                            {episode.air_date && (
+                              <p className="text-gray-400 text-sm mb-2">
+                                {new Date(episode.air_date).toLocaleDateString('en-US', {
+                                  day: 'numeric',
+                                  month: 'short',
+                                  year: 'numeric'
+                                })}
+                              </p>
+                            )}
+                            <p className="text-gray-300 text-sm leading-relaxed line-clamp-2">
+                              {episode.overview || "No description available."}
                             </p>
-                          )}
-                          <p className="text-gray-300 text-sm leading-relaxed line-clamp-2">
-                            {episode.overview || "No description available."}
-                          </p>
+                          </div>
                         </div>
-                      </div>
-                    ))}
+                      );
+                    })}
                   </div>
                 </div>
               )}

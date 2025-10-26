@@ -8,7 +8,7 @@ import { FeaturedSlider } from "@/components/content/featured-slider";
 import { ContentRow } from "@/components/content/content-row";
 import { ContentDetailsModal } from "@/components/content/content-details-modal";
 import { SkeletonLoader } from "@/components/ui/skeleton-loader";
-import { fetchTVShowDetails, getTMDBImageUrl, TV_GENRES } from "@/lib/tmdb";
+import { fetchTVShowDetails, getTMDBImageUrl, TV_GENRES, fetchMultipleTVShows } from "@/lib/tmdb";
 
 interface Content {
   id: string;
@@ -109,22 +109,24 @@ function TVShowsPageContent() {
       const { data: featuredData } = await featuredQuery;
 
       if (featuredData && featuredData.length > 0) {
-        const featuredWithMetadata = await Promise.all(
-          featuredData.map(async (content: Content) => {
-            const tmdbData = await fetchTVShowDetails(content.tmdb_id, true);
-            return {
-              id: content.id,
-              tmdbId: content.tmdb_id,
-              title: tmdbData?.name || `TV Show ${content.tmdb_id}`,
-              overview: tmdbData?.overview,
-              posterPath: getTMDBImageUrl(tmdbData?.poster_path || null, "w500"),
-              backdropPath: getTMDBImageUrl(tmdbData?.backdrop_path || null, "w1280"),
-              rating: tmdbData?.vote_average || 0,
-              type: "tv" as const,
-              trailerKey: tmdbData?.videos?.results?.find(v => v.type === "Trailer" && v.site === "YouTube")?.key,
-            };
-          })
-        );
+        // PERFORMANCE: Batch fetch all featured TV shows in parallel
+        const featuredIds = featuredData.map(c => c.tmdb_id);
+        const tmdbDataMap = await fetchMultipleTVShows(featuredIds, true);
+
+        const featuredWithMetadata = featuredData.map((content: Content) => {
+          const tmdbData = tmdbDataMap.get(content.tmdb_id);
+          return {
+            id: content.id,
+            tmdbId: content.tmdb_id,
+            title: tmdbData?.name || `TV Show ${content.tmdb_id}`,
+            overview: tmdbData?.overview,
+            posterPath: getTMDBImageUrl(tmdbData?.poster_path || null, "w500"),
+            backdropPath: getTMDBImageUrl(tmdbData?.backdrop_path || null, "w780"),
+            rating: tmdbData?.vote_average || 0,
+            type: "tv" as const,
+            trailerKey: tmdbData?.videos?.results?.find(v => v.type === "Trailer" && v.site === "YouTube")?.key,
+          };
+        });
         setFeaturedShows(featuredWithMetadata);
       }
 
@@ -144,22 +146,23 @@ function TVShowsPageContent() {
       if (error) throw error;
 
       if (data && data.length > 0) {
-        // Fetch TMDB metadata for all TV shows
-        const tvShowsWithMetadata = await Promise.all(
-          data.map(async (content: Content) => {
-            const tmdbData = await fetchTVShowDetails(content.tmdb_id);
-            return {
-              id: content.id,
-              tmdbId: content.tmdb_id,
-              title: tmdbData?.name || `TV Show ${content.tmdb_id}`,
-              posterPath: getTMDBImageUrl(tmdbData?.poster_path || null, "w500"),
-              backdropPath: getTMDBImageUrl(tmdbData?.backdrop_path || null, "w1280"),
-              rating: tmdbData?.vote_average || 0,
-              type: "tv" as const,
-              genreIds: tmdbData?.genre_ids || tmdbData?.genres?.map(g => g.id) || [],
-            };
-          })
-        );
+        // PERFORMANCE: Batch fetch all TV shows TMDB metadata in parallel
+        const tvShowIds = data.map(c => c.tmdb_id);
+        const tmdbDataMap = await fetchMultipleTVShows(tvShowIds, false);
+
+        const tvShowsWithMetadata = data.map((content: Content) => {
+          const tmdbData = tmdbDataMap.get(content.tmdb_id);
+          return {
+            id: content.id,
+            tmdbId: content.tmdb_id,
+            title: tmdbData?.name || `TV Show ${content.tmdb_id}`,
+            posterPath: getTMDBImageUrl(tmdbData?.poster_path || null, "w500"),
+            backdropPath: getTMDBImageUrl(tmdbData?.backdrop_path || null, "w780"),
+            rating: tmdbData?.vote_average || 0,
+            type: "tv" as const,
+            genreIds: tmdbData?.genre_ids || tmdbData?.genres?.map(g => g.id) || [],
+          };
+        });
 
         // Organize TV shows by genre
         const genreShows = GENRE_SECTIONS.map(section => {

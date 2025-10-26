@@ -7,9 +7,18 @@ export interface WatchProgress {
   episode_id: string | null;
   last_position: number;
   duration: number;
+  // Legacy fields (still exists for backward compatibility)
   season_number: number | null;
   episode_number: number | null;
+  // New hybrid schema fields
+  current_season: number | null;
+  current_episode: number | null;
+  current_position: number | null;
+  episodes_progress: Record<string, number> | null;
+  seasons_completed: Record<string, boolean> | null;
+  is_completed: boolean | null;
   updated_at: string;
+  last_watched_at: string | null;
 }
 
 export interface ContinueWatchingItem extends WatchProgress {

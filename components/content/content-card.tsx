@@ -25,6 +25,8 @@ export function ContentCard({ id, tmdbId, title, posterPath, rating, type }: Con
           alt={title}
           fill
           className="object-cover"
+          loading="lazy"
+          sizes="(max-width: 640px) 128px, (max-width: 768px) 160px, 192px"
           onError={() => setImageError(true)}
         />
       ) : (
