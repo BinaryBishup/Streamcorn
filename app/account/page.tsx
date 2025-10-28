@@ -123,7 +123,9 @@ export default function AccountPage() {
             } else {
               details = await fetchTVShowDetails(item.content_id);
             }
-            contentMap.set(item.content_id, details);
+            if (details) {
+              contentMap.set(item.content_id, details);
+            }
           } catch (error) {
             console.error(`Error fetching content ${item.content_id}:`, error);
           }
