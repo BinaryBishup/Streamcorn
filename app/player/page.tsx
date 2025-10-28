@@ -112,6 +112,7 @@ function PlayerContent() {
   const [savedPosition, setSavedPosition] = useState<number | null>(null);
   const [autoPlayCountdown, setAutoPlayCountdown] = useState<number | null>(null);
   const [showAutoPlayOverlay, setShowAutoPlayOverlay] = useState(false);
+  const [completionThreshold, setCompletionThreshold] = useState<number | null>(null);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -373,16 +374,18 @@ function PlayerContent() {
         setShowSkipCredits(false);
       }
 
-      // Show next episode preview when in credits or last 60 seconds
-      const timeRemaining = duration - currentTime;
+      // Use completion threshold from database (in seconds)
+      // completionThreshold is the position when episode is considered complete
+      // For example, if threshold is 90 seconds, episode is complete when currentTime >= 90
       const shouldShowNextEpisode =
         content?.content_type !== "movie" &&
         currentEpisode < allEpisodes.length &&
-        (timeRemaining <= 60 || (episode.skip_credits_start !== null && currentTime >= episode.skip_credits_start));
+        completionThreshold !== null &&
+        currentTime >= completionThreshold;
 
       setShowNextEpisode(Boolean(shouldShowNextEpisode));
     }
-  }, [currentTime, episode, duration, content, currentEpisode, allEpisodes.length]);
+  }, [currentTime, episode, duration, content, currentEpisode, allEpisodes.length, completionThreshold]);
 
   // Scroll to current episode when Episodes modal opens
   useEffect(() => {
@@ -596,6 +599,9 @@ function PlayerContent() {
         if (episodeError) throw episodeError;
         setEpisode(episodeData);
 
+        // Set completion threshold from database
+        setCompletionThreshold(episodeData.completion_threshold || 90);
+
         const season = (episodeData as any).seasons;
         setSeasonData(season);
         setCurrentSeason(season.season_number);
@@ -665,6 +671,10 @@ function PlayerContent() {
 
         if (episodeError) throw episodeError;
         setEpisode(episodeData);
+
+        // Set completion threshold from database
+        setCompletionThreshold(episodeData.completion_threshold || 90);
+
         setSeasonData(seasonData);
         setCurrentSeason(seasonData.season_number);
         setCurrentEpisode(episodeData.episode_number);
@@ -713,6 +723,9 @@ function PlayerContent() {
           setSavedPosition(0);
         }
       } else if (isMovie) {
+        // Set completion threshold from database for movies
+        setCompletionThreshold(contentData.completion_threshold || 120);
+
         // Set video URL from content data
         if (contentData.video_url && contentData.video_url.hls_url) {
           setVideoUrl(contentData.video_url.hls_url);
@@ -830,19 +843,9 @@ function PlayerContent() {
     if (!position || !totalDuration) return;
 
     try {
-      // Improved completion threshold logic
-      let completionThreshold = totalDuration;
-
-      if (episode?.skip_credits_start) {
-        // If skip_credits_start exists, use it as threshold
-        completionThreshold = episode.skip_credits_start;
-      } else if (episode?.duration) {
-        // Otherwise, use 95% of episode duration to account for credits
-        completionThreshold = episode.duration * 0.95;
-      } else if (content.duration) {
-        // For movies, use 95% of total duration
-        completionThreshold = content.duration * 0.95;
-      }
+      // Use completion threshold from database (already loaded in state)
+      // completionThreshold is the position (in seconds) when content is considered complete
+      const thresholdValue = completionThreshold || (content.content_type === "movie" ? 120 : 90);
 
       if (content.content_type === "movie") {
         // For movies - call PostgreSQL function
@@ -854,7 +857,7 @@ function PlayerContent() {
           p_duration: totalDuration,
           p_title: contentTitle,
           p_thumbnail: "",
-          p_completion_threshold: completionThreshold,
+          p_completion_threshold: thresholdValue,
         });
       } else if (episodeId && episode && seasonData) {
         // For TV shows/anime - call PostgreSQL function
@@ -869,11 +872,11 @@ function PlayerContent() {
           p_duration: totalDuration,
           p_title: contentTitle,
           p_thumbnail: "",
-          p_completion_threshold: completionThreshold,
+          p_completion_threshold: thresholdValue,
         });
 
-        // Also update watched_episodes table if completed (95% threshold)
-        const isCompleted = position >= completionThreshold * 0.95;
+        // Also update watched_episodes table if completed (using database threshold)
+        const isCompleted = position >= thresholdValue;
         if (isCompleted) {
           await supabase.from("watched_episodes").upsert({
             profile_id: profileId,
@@ -905,11 +908,11 @@ function PlayerContent() {
             p_duration: totalDuration,
             p_title: contentTitle,
             p_thumbnail: "",
-            p_completion_threshold: completionThreshold,
+            p_completion_threshold: thresholdValue,
           });
 
-          // Also update watched_episodes table if completed (95% threshold)
-          const isCompleted = position >= completionThreshold * 0.95;
+          // Also update watched_episodes table if completed (using database threshold)
+          const isCompleted = position >= thresholdValue;
           if (isCompleted) {
             await supabase.from("watched_episodes").upsert({
               profile_id: profileId,
@@ -1209,6 +1212,18 @@ function PlayerContent() {
         </div>
       )}
 
+      {/* Next Episode Button - Shows when completion threshold is reached */}
+      {showNextEpisode && !showSkipCredits && content?.content_type !== "movie" && currentEpisode < allEpisodes.length && (
+        <div className="absolute bottom-32 right-12 z-50">
+          <button
+            onClick={handleNextEpisode}
+            className="bg-white/20 hover:bg-white/30 backdrop-blur-sm text-white px-8 py-3 rounded-sm text-lg font-semibold transition-all duration-200 border border-white/40"
+          >
+            Next Episode
+          </button>
+        </div>
+      )}
+
       {/* Auto-Play Next Episode Overlay */}
       {showAutoPlayOverlay && allEpisodes[currentEpisode] && (
         <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-50">
@@ -1416,7 +1431,7 @@ function PlayerContent() {
 
           {/* Right Controls */}
           <div className="flex items-center gap-6">
-            {/* Next Episode */}
+            {/* Next Episode - Always show in controls */}
             {content?.content_type !== "movie" && currentEpisode < allEpisodes.length && (
               <div
                 className="relative"
