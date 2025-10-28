@@ -1,5 +1,9 @@
 const TMDB_API_KEY = process.env.NEXT_PUBLIC_TMDB_API_KEY;
 const TMDB_BASE_URL = process.env.NEXT_PUBLIC_TMDB_BASE_URL || "https://api.themoviedb.org/3";
+
+// Image base URL - configured to use Bunny CDN for better delivery in India
+// Bunny CDN bypasses JIO network blocking and provides faster delivery
+// Falls back to direct TMDB if not configured
 const TMDB_IMAGE_BASE_URL = process.env.NEXT_PUBLIC_TMDB_IMAGE_BASE_URL || "https://image.tmdb.org/t/p";
 
 // In-memory cache for TMDB API responses
