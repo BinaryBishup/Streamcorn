@@ -24,7 +24,7 @@ interface AnimeWithMetadata {
   title: string;
   overview?: string;
   posterPath: string | null;
-  backdropPath?: string | null;
+  backdropPath: string | null;
   rating?: number;
   type: "movie" | "tv" | "anime";
   genreIds?: number[];
@@ -118,8 +118,8 @@ function AnimePageContent() {
             tmdbId: content.tmdb_id,
             title: tmdbData?.name || `Anime ${content.tmdb_id}`,
             overview: tmdbData?.overview,
-            posterPath: getTMDBImageUrl(tmdbData?.poster_path || null, "w500"),
-            backdropPath: getTMDBImageUrl(tmdbData?.backdrop_path || null, "w780"),
+            posterPath: getTMDBImageUrl(tmdbData?.poster_path || null, "w500") || null,
+            backdropPath: getTMDBImageUrl(tmdbData?.backdrop_path || null, "w780") || null,
             rating: tmdbData?.vote_average || 0,
             type: "anime" as const,
             trailerKey: tmdbData?.videos?.results?.find(v => v.type === "Trailer" && v.site === "YouTube")?.key,
@@ -154,8 +154,8 @@ function AnimePageContent() {
             id: content.id,
             tmdbId: content.tmdb_id,
             title: tmdbData?.name || `Anime ${content.tmdb_id}`,
-            posterPath: getTMDBImageUrl(tmdbData?.poster_path || null, "w500"),
-            backdropPath: getTMDBImageUrl(tmdbData?.backdrop_path || null, "w780"),
+            posterPath: getTMDBImageUrl(tmdbData?.poster_path || null, "w500") || null,
+            backdropPath: getTMDBImageUrl(tmdbData?.backdrop_path || null, "w780") || null,
             rating: tmdbData?.vote_average || 0,
             type: "anime" as const,
             genreIds: tmdbData?.genre_ids || tmdbData?.genres?.map(g => g.id) || [],

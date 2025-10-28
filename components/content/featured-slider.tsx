@@ -12,8 +12,8 @@ interface FeaturedItem {
   tmdbId: number;
   title: string;
   overview?: string;
-  backdropPath?: string | null;
-  posterPath?: string | null;
+  backdropPath: string | null;
+  posterPath: string | null;
   rating?: number;
   type: "movie" | "tv" | "anime";
   trailerKey?: string;

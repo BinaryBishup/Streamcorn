@@ -32,7 +32,7 @@ interface ContentWithMetadata {
   title: string;
   overview?: string;
   posterPath: string | null;
-  backdropPath?: string | null;
+  backdropPath: string | null;
   rating?: number;
   type: "movie" | "tv" | "anime";
 }
@@ -157,8 +157,8 @@ function HomePageContent() {
               ? (tmdbData as any)?.name || `${content.content_type} ${content.tmdb_id}`
               : (tmdbData as any)?.title || `Movie ${content.tmdb_id}`,
             overview: tmdbData?.overview,
-            posterPath: getTMDBImageUrl(tmdbData?.poster_path || null, "w500"),
-            backdropPath: getTMDBImageUrl(tmdbData?.backdrop_path || null, "w780"),
+            posterPath: getTMDBImageUrl(tmdbData?.poster_path || null, "w500") || null,
+            backdropPath: getTMDBImageUrl(tmdbData?.backdrop_path || null, "w780") || null,
             rating: tmdbData?.vote_average || 0,
             type: content.content_type,
             trailerKey: tmdbData?.videos?.results?.find(v => v.type === "Trailer" && v.site === "YouTube")?.key,

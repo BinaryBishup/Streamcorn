@@ -10,7 +10,7 @@ interface ContentItem {
   tmdbId: number;
   title: string;
   posterPath: string | null;
-  backdropPath?: string | null;
+  backdropPath: string | null;
   rating?: number;
   type: "movie" | "tv" | "anime";
 }
