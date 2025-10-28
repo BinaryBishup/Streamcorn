@@ -36,7 +36,7 @@ const ContentCardHoverComponent = ({
   const [genres, setGenres] = useState<string[]>([]);
   const [clipUrl, setClipUrl] = useState<string | null>(null);
   const [trailerKey, setTrailerKey] = useState<string | null>(null);
-  const [isMuted, setIsMuted] = useState(true);
+  const [isMuted, setIsMuted] = useState(false);
   const [isVideoReady, setIsVideoReady] = useState(false);
   const [seasons, setSeasons] = useState<number>(0);
   const [episodes, setEpisodes] = useState<number>(0);
@@ -52,16 +52,6 @@ const ContentCardHoverComponent = ({
     }
   }, [isHovered, logoPath]);
 
-  // Auto-unmute after video starts playing (Netflix-style)
-  useEffect(() => {
-    if (isVideoReady) {
-      // Wait 500ms for video to start, then unmute
-      const unmuteTimer = setTimeout(() => {
-        setIsMuted(false);
-      }, 500);
-      return () => clearTimeout(unmuteTimer);
-    }
-  }, [isVideoReady]);
 
   const fetchDetails = async () => {
     try {
@@ -177,7 +167,7 @@ const ContentCardHoverComponent = ({
     }
     setIsHovered(false);
     setIsVideoReady(false);
-    setIsMuted(true); // Reset to muted for next hover
+    setIsMuted(false); // Reset to unmuted for next hover
 
     // Pause and reset video
     if (videoRef.current) {

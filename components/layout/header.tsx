@@ -2,10 +2,10 @@
 
 import { useState, useEffect } from "react";
 import Link from "next/link";
-import { useRouter, usePathname, useSearchParams } from "next/navigation";
+import { useRouter, usePathname } from "next/navigation";
 import { Search, Menu, ChevronDown, Bell, Sparkles } from "lucide-react";
 import { createClient } from "@/lib/supabase/client";
-import { NAV_ITEMS, OTT_PLATFORMS } from "@/lib/constants";
+import { NAV_ITEMS } from "@/lib/constants";
 import { Button } from "@/components/ui/button";
 import {
   DropdownMenu,
@@ -25,14 +25,11 @@ interface Profile {
 export function Header() {
   const router = useRouter();
   const pathname = usePathname();
-  const searchParams = useSearchParams();
   const supabase = createClient();
 
   const [profiles, setProfiles] = useState<Profile[]>([]);
   const [currentProfile, setCurrentProfile] = useState<Profile | null>(null);
   const [scrolled, setScrolled] = useState(false);
-
-  const selectedPlatform = searchParams.get("platform");
 
   useEffect(() => {
     loadProfiles();
@@ -73,19 +70,6 @@ export function Header() {
   const handleProfileSwitch = (profileId: string) => {
     localStorage.setItem("selectedProfile", profileId);
     window.location.reload();
-  };
-
-  const handlePlatformFilter = (platformId: string) => {
-    const params = new URLSearchParams(searchParams.toString());
-
-    if (selectedPlatform === platformId) {
-      params.delete("platform");
-    } else {
-      params.set("platform", platformId);
-    }
-
-    const newUrl = `${pathname}?${params.toString()}`;
-    router.push(newUrl);
   };
 
   const handleLogout = async () => {
@@ -233,40 +217,6 @@ export function Header() {
               </DropdownMenuItem>
             </DropdownMenuContent>
           </DropdownMenu>
-        </div>
-      </div>
-
-      {/* OTT Platform Filters */}
-      <div className="border-t border-white/10 px-4 md:px-8 py-3 overflow-x-auto scrollbar-hide">
-        <div className="flex items-center gap-4 min-w-max">
-          {OTT_PLATFORMS.map((platform) => (
-            <button
-              key={platform.id}
-              onClick={() => handlePlatformFilter(platform.id)}
-              className={`relative h-12 px-4 rounded-lg transition-all flex items-center justify-center ${
-                selectedPlatform === platform.id
-                  ? "bg-white/20 ring-2 ring-white/50 scale-105"
-                  : "bg-white/5 hover:bg-white/10"
-              }`}
-              title={platform.name}
-            >
-              <Image
-                src={platform.logo}
-                alt={platform.name}
-                width={80}
-                height={32}
-                className="object-contain max-h-8"
-              />
-            </button>
-          ))}
-          {selectedPlatform && (
-            <button
-              onClick={() => handlePlatformFilter(selectedPlatform)}
-              className="px-4 py-2 rounded-lg text-sm font-medium bg-gray-800 text-white hover:bg-gray-700 transition-colors whitespace-nowrap"
-            >
-              Clear Filter
-            </button>
-          )}
         </div>
       </div>
     </header>

@@ -8,7 +8,9 @@ import { getTMDBImageUrl } from "@/lib/tmdb";
 import { Search, X, ArrowLeft } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ContentCardHover } from "@/components/content/content-card-hover";
+import { OTT_PLATFORMS } from "@/lib/constants";
 import Link from "next/link";
+import Image from "next/image";
 
 // Lazy load the modal
 const ContentDetailsModal = dynamic(
@@ -42,6 +44,7 @@ function SearchPageContent() {
   const [searchQuery, setSearchQuery] = useState("");
   const [results, setResults] = useState<ContentWithMetadata[]>([]);
   const [selectedContentType, setSelectedContentType] = useState<string>("all");
+  const [selectedPlatform, setSelectedPlatform] = useState<string>("all");
   const [selectedContentId, setSelectedContentId] = useState<string | null>(null);
   const router = useRouter();
   const searchParams = useSearchParams();
@@ -90,7 +93,7 @@ function SearchPageContent() {
     if (searchQuery.trim()) {
       performSearch();
     }
-  }, [selectedContentType]);
+  }, [selectedContentType, selectedPlatform]);
 
   const performSearch = async () => {
     if (!searchQuery.trim()) {
@@ -104,14 +107,19 @@ function SearchPageContent() {
       // Search our database by tags
       const searchTerm = searchQuery.toLowerCase().trim();
 
-      // Build the query based on content type filter
+      // Build the query based on filters
       let query = supabase
         .from("content")
-        .select("id, tmdb_id, content_type, tags");
+        .select("id, tmdb_id, content_type, tags, platform_id");
 
       // Apply content type filter
       if (selectedContentType !== "all") {
         query = query.eq("content_type", selectedContentType);
+      }
+
+      // Apply platform filter
+      if (selectedPlatform !== "all") {
+        query = query.eq("platform_id", selectedPlatform);
       }
 
       const { data: matchingContent, error } = await query;
@@ -223,53 +231,53 @@ function SearchPageContent() {
 
   return (
     <div className="min-h-screen bg-black">
-      {/* Back Button */}
-      <div className="fixed top-6 left-6 z-50">
-        <Link href="/">
-          <Button
-            variant="ghost"
-            size="icon"
-            className="w-12 h-12 rounded-full bg-black/80 hover:bg-black border border-white/30"
-          >
-            <ArrowLeft className="w-6 h-6 text-white" />
-          </Button>
-        </Link>
-      </div>
+      {/* Top Bar with Back Button and Search */}
+      <div className="sticky top-0 z-50 bg-black border-b border-gray-800">
+        <div className="px-4 md:px-16 py-4">
+          <div className="flex items-center gap-4">
+            {/* Back Button */}
+            <Link href="/">
+              <Button
+                variant="ghost"
+                size="icon"
+                className="w-10 h-10 rounded-full bg-black/80 hover:bg-black border border-white/30 flex-shrink-0"
+              >
+                <ArrowLeft className="w-5 h-5 text-white" />
+              </Button>
+            </Link>
 
-      <div className="pt-24 px-4 md:px-16 pb-16">
-        {/* Search Section */}
-        <div className="max-w-4xl mx-auto mb-12">
-          <h1 className="text-3xl md:text-4xl font-bold text-white mb-8">Search</h1>
+            {/* Search Input */}
+            <form onSubmit={handleSearch} className="flex-1 max-w-4xl">
+              <div className="relative">
+                <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
+                <input
+                  type="text"
+                  value={searchQuery}
+                  onChange={(e) => setSearchQuery(e.target.value)}
+                  placeholder="Search for movies, TV shows, or anime..."
+                  className="w-full bg-gray-900 text-white pl-12 pr-12 py-3 rounded-lg border border-gray-800 focus:border-white focus:outline-none"
+                  autoFocus
+                />
+                {searchQuery && (
+                  <button
+                    type="button"
+                    onClick={clearSearch}
+                    className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
+                  >
+                    <X className="w-5 h-5" />
+                  </button>
+                )}
+              </div>
+            </form>
+          </div>
 
-          {/* Search Input */}
-          <form onSubmit={handleSearch} className="relative mb-6">
-            <div className="relative">
-              <Search className="absolute left-4 top-1/2 -translate-y-1/2 w-5 h-5 text-gray-400" />
-              <input
-                type="text"
-                value={searchQuery}
-                onChange={(e) => setSearchQuery(e.target.value)}
-                placeholder="Search for movies, TV shows, or anime..."
-                className="w-full bg-gray-900 text-white pl-12 pr-12 py-4 rounded-lg border border-gray-800 focus:border-white focus:outline-none text-lg"
-              />
-              {searchQuery && (
-                <button
-                  type="button"
-                  onClick={clearSearch}
-                  className="absolute right-4 top-1/2 -translate-y-1/2 text-gray-400 hover:text-white transition-colors"
-                >
-                  <X className="w-5 h-5" />
-                </button>
-              )}
-            </div>
-          </form>
-
-          {/* Filters */}
-          <div className="flex flex-wrap gap-4">
+          {/* Filters Row */}
+          <div className="flex flex-wrap gap-3 mt-4 items-center">
             {/* Content Type Filter */}
             <div className="flex gap-2">
               <Button
                 onClick={() => setSelectedContentType("all")}
+                size="sm"
                 variant={selectedContentType === "all" ? "default" : "outline"}
                 className={
                   selectedContentType === "all"
@@ -281,6 +289,7 @@ function SearchPageContent() {
               </Button>
               <Button
                 onClick={() => setSelectedContentType("movie")}
+                size="sm"
                 variant={selectedContentType === "movie" ? "default" : "outline"}
                 className={
                   selectedContentType === "movie"
@@ -292,6 +301,7 @@ function SearchPageContent() {
               </Button>
               <Button
                 onClick={() => setSelectedContentType("tv")}
+                size="sm"
                 variant={selectedContentType === "tv" ? "default" : "outline"}
                 className={
                   selectedContentType === "tv"
@@ -303,6 +313,7 @@ function SearchPageContent() {
               </Button>
               <Button
                 onClick={() => setSelectedContentType("anime")}
+                size="sm"
                 variant={selectedContentType === "anime" ? "default" : "outline"}
                 className={
                   selectedContentType === "anime"
@@ -313,11 +324,48 @@ function SearchPageContent() {
                 Anime
               </Button>
             </div>
+
+            {/* Platform Filter with Logos */}
+            <div className="flex items-center gap-2">
+              <button
+                onClick={() => setSelectedPlatform("all")}
+                className={`px-4 py-2 rounded-lg text-sm font-medium transition-all ${
+                  selectedPlatform === "all"
+                    ? "bg-white text-black"
+                    : "bg-gray-900 text-white border border-gray-700 hover:bg-gray-800"
+                }`}
+              >
+                All Platforms
+              </button>
+              {OTT_PLATFORMS.map((platform) => (
+                <button
+                  key={platform.id}
+                  onClick={() => setSelectedPlatform(platform.id)}
+                  className={`relative h-10 px-3 rounded-lg transition-all flex items-center justify-center ${
+                    selectedPlatform === platform.id
+                      ? "bg-white/20 ring-2 ring-white/50 scale-105"
+                      : "bg-white/5 hover:bg-white/10"
+                  }`}
+                  title={platform.name}
+                >
+                  <Image
+                    src={platform.logo}
+                    alt={platform.name}
+                    width={60}
+                    height={24}
+                    className="object-contain max-h-6"
+                  />
+                </button>
+              ))}
+            </div>
           </div>
         </div>
+      </div>
+
+      <div className="px-4 md:px-16 py-8">
 
         {/* Results Section */}
-        <div className="max-w-7xl mx-auto">
+        <div>
           {loading && (
             <div className="flex justify-center items-center py-20">
               <div className="animate-spin rounded-full h-12 w-12 border-t-2 border-b-2 border-white"></div>
@@ -341,7 +389,7 @@ function SearchPageContent() {
               <p className="text-gray-400 mb-6">
                 {results.length} result{results.length !== 1 ? "s" : ""} found
               </p>
-              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 lg:grid-cols-5 xl:grid-cols-6 2xl:grid-cols-7 gap-4">
                 {results.map((item) => (
                   <ContentCardHover
                     key={item.id}
