@@ -1,12 +1,13 @@
 "use client";
 
-import { useState } from "react";
+import { useState, useEffect } from "react";
 import { useRouter } from "next/navigation";
 import { createClient } from "@/lib/supabase/client";
 import { SUBSCRIPTION_PLANS, type SubscriptionPlan } from "@/lib/subscription";
 import { Button } from "@/components/ui/button";
 import { Check, Monitor, Users, Sparkles, ArrowLeft } from "lucide-react";
 import { useSubscription } from "@/contexts/subscription-context";
+import Image from "next/image";
 
 export default function SubscribePage() {
   const router = useRouter();
@@ -14,6 +15,27 @@ export default function SubscribePage() {
   const { plan: currentPlan, refreshSubscription } = useSubscription();
   const [loading, setLoading] = useState(false);
   const [selectedPlan, setSelectedPlan] = useState<SubscriptionPlan | null>(null);
+  const [popularMovies, setPopularMovies] = useState<string[]>([]);
+
+  useEffect(() => {
+    fetchPopularMovies();
+  }, []);
+
+  const fetchPopularMovies = async () => {
+    try {
+      const response = await fetch(
+        `https://api.themoviedb.org/3/movie/popular?api_key=${process.env.NEXT_PUBLIC_TMDB_API_KEY}&language=en-US&page=1`
+      );
+      const data = await response.json();
+      const posters = data.results
+        .filter((movie: any) => movie.poster_path)
+        .slice(0, 30)
+        .map((movie: any) => `https://image.tmdb.org/t/p/w342${movie.poster_path}`);
+      setPopularMovies(posters);
+    } catch (error) {
+      console.error("Error fetching popular movies:", error);
+    }
+  };
 
   const handleSelectPlan = async (plan: SubscriptionPlan) => {
     setLoading(true);
@@ -126,19 +148,90 @@ export default function SubscribePage() {
       {/* Header */}
       <div className="sticky top-0 z-50 bg-black/80 backdrop-blur-sm border-b border-zinc-800">
         <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
-          <div className="flex items-center justify-between h-16">
-            <h1 className="text-xl font-semibold text-white">StreamCorn Subscription Plans</h1>
+          <div className="flex items-center h-16">
             <Button
               variant="ghost"
               onClick={() => router.push("/")}
-              className="text-zinc-400 hover:text-white"
+              className="text-zinc-400 hover:text-white mr-4"
             >
               <ArrowLeft className="w-4 h-4 mr-2" />
               Back to Home
             </Button>
+            <h1 className="text-xl font-semibold text-white">Plans</h1>
           </div>
         </div>
       </div>
+
+      {/* Movie Posters Background Slider */}
+      {popularMovies.length > 0 && (
+        <div className="relative w-full overflow-hidden py-16 bg-black">
+          {/* Animated Poster Rows */}
+          <div className="relative space-y-4">
+            {/* Row 1 - Moving Right */}
+            <div className="flex gap-4 animate-scroll-right">
+              {[...popularMovies.slice(0, 10), ...popularMovies.slice(0, 10)].map((poster, i) => (
+                <div key={`row1-${i}`} className="relative flex-shrink-0 w-32 h-48 rounded-lg overflow-hidden">
+                  <Image
+                    src={poster}
+                    alt="Movie"
+                    fill
+                    className="object-cover"
+                    sizes="128px"
+                  />
+                </div>
+              ))}
+            </div>
+
+            {/* Row 2 - Moving Left */}
+            <div className="flex gap-4 animate-scroll-left">
+              {[...popularMovies.slice(10, 20), ...popularMovies.slice(10, 20)].map((poster, i) => (
+                <div key={`row2-${i}`} className="relative flex-shrink-0 w-32 h-48 rounded-lg overflow-hidden">
+                  <Image
+                    src={poster}
+                    alt="Movie"
+                    fill
+                    className="object-cover"
+                    sizes="128px"
+                  />
+                </div>
+              ))}
+            </div>
+
+            {/* Row 3 - Moving Right */}
+            <div className="flex gap-4 animate-scroll-right">
+              {[...popularMovies.slice(20, 30), ...popularMovies.slice(20, 30)].map((poster, i) => (
+                <div key={`row3-${i}`} className="relative flex-shrink-0 w-32 h-48 rounded-lg overflow-hidden">
+                  <Image
+                    src={poster}
+                    alt="Movie"
+                    fill
+                    className="object-cover"
+                    sizes="128px"
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Dark Overlay */}
+          <div className="absolute inset-0 bg-black/80 backdrop-blur-sm" />
+
+          {/* Platform Logos and Text */}
+          <div className="absolute inset-0 flex flex-col items-center justify-center z-10">
+            <div className="flex items-center gap-8 mb-6">
+              {/* Platform logos - using simple colored badges as placeholders */}
+              <div className="flex items-center gap-4">
+                <div className="px-4 py-2 bg-red-600 text-white font-bold rounded">Netflix</div>
+                <div className="px-4 py-2 bg-blue-600 text-white font-bold rounded">Disney+</div>
+                <div className="px-4 py-2 bg-purple-600 text-white font-bold rounded">HBO Max</div>
+                <div className="px-4 py-2 bg-green-600 text-white font-bold rounded">Hulu</div>
+                <div className="px-4 py-2 bg-yellow-600 text-white font-bold rounded">Prime</div>
+              </div>
+            </div>
+            <p className="text-white text-2xl font-semibold">Included in all plans</p>
+          </div>
+        </div>
+      )}
 
       {/* Pricing Cards */}
       <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">

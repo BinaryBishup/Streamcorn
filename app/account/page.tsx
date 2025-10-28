@@ -261,30 +261,36 @@ export default function AccountPage() {
           </p>
         </div>
 
-        {/* Tabs */}
-        <div className="flex gap-2 mb-8 overflow-x-auto pb-2">
-          {tabs.map((tab) => {
-            const Icon = tab.icon;
-            const isActive = activeTab === tab.id;
-            return (
-              <button
-                key={tab.id}
-                onClick={() => setActiveTab(tab.id)}
-                className={`flex items-center gap-2 px-6 py-3 rounded-lg font-medium transition-all whitespace-nowrap ${
-                  isActive
-                    ? "bg-red-600 text-white"
-                    : "bg-zinc-900 text-zinc-400 hover:bg-zinc-800 hover:text-white"
-                }`}
-              >
-                <Icon className="w-4 h-4" />
-                {tab.label}
-              </button>
-            );
-          })}
-        </div>
+        {/* Two-Column Layout */}
+        <div className="flex flex-col lg:flex-row gap-6">
+          {/* Left Sidebar - Tabs */}
+          <div className="lg:w-64 flex-shrink-0">
+            <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-2 sticky top-20">
+              <div className="space-y-1">
+                {tabs.map((tab) => {
+                  const Icon = tab.icon;
+                  const isActive = activeTab === tab.id;
+                  return (
+                    <button
+                      key={tab.id}
+                      onClick={() => setActiveTab(tab.id)}
+                      className={`w-full flex items-center gap-3 px-4 py-3 rounded-lg font-medium transition-all text-left ${
+                        isActive
+                          ? "bg-red-600 text-white"
+                          : "text-zinc-400 hover:bg-zinc-800 hover:text-white"
+                      }`}
+                    >
+                      <Icon className="w-5 h-5" />
+                      <span>{tab.label}</span>
+                    </button>
+                  );
+                })}
+              </div>
+            </div>
+          </div>
 
-        {/* Tab Content */}
-        <div className="bg-zinc-900 rounded-xl border border-zinc-800 p-6 md:p-8">
+          {/* Right Content Area */}
+          <div className="flex-1 bg-zinc-900 rounded-xl border border-zinc-800 p-6 md:p-8">
           {/* Profile Tab */}
           {activeTab === "profile" && (
             <div className="space-y-6">
@@ -547,6 +553,7 @@ export default function AccountPage() {
               </div>
             </div>
           )}
+          </div>
         </div>
       </div>
     </div>

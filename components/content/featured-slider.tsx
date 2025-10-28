@@ -22,9 +22,11 @@ interface FeaturedItem {
 interface FeaturedSliderProps {
   items: FeaturedItem[];
   autoPlayInterval?: number;
+  onItemClick?: (item: FeaturedItem) => void;
+  onPlayClick?: (item: FeaturedItem) => void;
 }
 
-export function FeaturedSlider({ items, autoPlayInterval = 5000 }: FeaturedSliderProps) {
+export function FeaturedSlider({ items, autoPlayInterval = 5000, onItemClick, onPlayClick }: FeaturedSliderProps) {
   const searchParams = useSearchParams();
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
@@ -279,11 +281,15 @@ export function FeaturedSlider({ items, autoPlayInterval = 5000 }: FeaturedSlide
 
         {/* Action Buttons */}
         <div className="flex gap-3">
-          <Button className="bg-white hover:bg-white/90 text-black font-semibold px-6 md:px-8 py-2 md:py-3 text-base md:text-lg rounded">
+          <Button
+            onClick={() => onPlayClick?.(currentItem)}
+            className="bg-white hover:bg-white/90 text-black font-semibold px-6 md:px-8 py-2 md:py-3 text-base md:text-lg rounded"
+          >
             <Play className="w-5 h-5 md:w-6 md:h-6 mr-2" fill="currentColor" />
             Play
           </Button>
           <Button
+            onClick={() => onItemClick?.(currentItem)}
             variant="outline"
             className="bg-gray-500/50 hover:bg-gray-500/70 text-white border-none font-semibold px-6 md:px-8 py-2 md:py-3 text-base md:text-lg rounded"
           >

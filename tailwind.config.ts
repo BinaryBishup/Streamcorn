@@ -9,6 +9,20 @@ const config: Config = {
   ],
   theme: {
     extend: {
+      animation: {
+        'scroll-right': 'scrollRight 60s linear infinite',
+        'scroll-left': 'scrollLeft 60s linear infinite',
+      },
+      keyframes: {
+        scrollRight: {
+          '0%': { transform: 'translateX(0)' },
+          '100%': { transform: 'translateX(-50%)' },
+        },
+        scrollLeft: {
+          '0%': { transform: 'translateX(-50%)' },
+          '100%': { transform: 'translateX(0)' },
+        },
+      },
       colors: {
         background: "hsl(var(--background))",
         foreground: "hsl(var(--foreground))",

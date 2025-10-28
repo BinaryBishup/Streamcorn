@@ -294,7 +294,14 @@ function HomePageContent() {
         {/* Featured Slider */}
         {featuredItems.length > 0 && (
           <div className="relative -mt-20">
-            <FeaturedSlider items={featuredItems} />
+            <FeaturedSlider
+              items={featuredItems}
+              onItemClick={handleContentClick}
+              onPlayClick={(item) => {
+                // Open modal with auto-play enabled
+                handleContentClick(item);
+              }}
+            />
           </div>
         )}
 
