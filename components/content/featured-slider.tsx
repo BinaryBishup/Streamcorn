@@ -55,7 +55,7 @@ export function FeaturedSlider({ items, autoPlayInterval = 5000 }: FeaturedSlide
     return () => clearInterval(interval);
   }, [items.length, autoPlayInterval, isPaused, showTrailer]);
 
-  // Viewport detection
+  // Viewport detection and window visibility
   useEffect(() => {
     if (!containerRef.current) return;
 
@@ -70,8 +70,21 @@ export function FeaturedSlider({ items, autoPlayInterval = 5000 }: FeaturedSlide
       { threshold: 0.5 }
     );
 
+    // Pause trailer when window/tab is not active
+    const handleVisibilityChange = () => {
+      if (document.hidden) {
+        setShowTrailer(false);
+        setTrailerEnded(false);
+      }
+    };
+
     observer.observe(containerRef.current);
-    return () => observer.disconnect();
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      observer.disconnect();
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
   }, []);
 
   // Auto-play trailer after 2 seconds if available, in view, and modal is not open

@@ -111,7 +111,7 @@ export function ContentDetailsModal({ contentId, onClose }: ContentDetailsModalP
   }, [showVideo]);
 
   useEffect(() => {
-    // Pause video when not in view using Intersection Observer
+    // Pause video when not in view using Intersection Observer, or when window is not active
     if (!videoContainerRef.current) return;
 
     const observer = new IntersectionObserver(
@@ -130,10 +130,27 @@ export function ContentDetailsModal({ contentId, onClose }: ContentDetailsModalP
       }
     );
 
+    // Pause video when window/tab is not active or when user scrolls
+    const handleVisibilityChange = () => {
+      if (videoRef.current && document.hidden) {
+        videoRef.current.pause();
+      }
+    };
+
+    const handleScroll = () => {
+      if (videoRef.current && showVideo) {
+        videoRef.current.pause();
+      }
+    };
+
     observer.observe(videoContainerRef.current);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+    window.addEventListener("scroll", handleScroll);
 
     return () => {
       observer.disconnect();
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+      window.removeEventListener("scroll", handleScroll);
     };
   }, [showVideo]);
 
