@@ -160,9 +160,112 @@ export default function SubscribePage() {
         </div>
       </div>
 
-      {/* Pricing Cards */}
-      <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
-        <div className="grid md:grid-cols-3 gap-4">
+      {/* Movie Posters Background with Content */}
+      {popularMovies.length > 0 ? (
+        <div className="relative w-full overflow-hidden py-16 bg-black min-h-screen">
+          {/* Animated Poster Rows */}
+          <div className="absolute inset-0 space-y-4 pt-16">
+            {/* Row 1 - Moving Right */}
+            <div className="flex gap-4 animate-scroll-right">
+              {[...popularMovies.slice(0, 10), ...popularMovies.slice(0, 10)].map((poster, i) => (
+                <div key={`row1-${i}`} className="relative flex-shrink-0 w-32 h-48 rounded-lg overflow-hidden">
+                  <Image
+                    src={poster}
+                    alt="Movie"
+                    fill
+                    className="object-cover"
+                    sizes="128px"
+                  />
+                </div>
+              ))}
+            </div>
+
+            {/* Row 2 - Moving Left */}
+            <div className="flex gap-4 animate-scroll-left">
+              {[...popularMovies.slice(10, 20), ...popularMovies.slice(10, 20)].map((poster, i) => (
+                <div key={`row2-${i}`} className="relative flex-shrink-0 w-32 h-48 rounded-lg overflow-hidden">
+                  <Image
+                    src={poster}
+                    alt="Movie"
+                    fill
+                    className="object-cover"
+                    sizes="128px"
+                  />
+                </div>
+              ))}
+            </div>
+
+            {/* Row 3 - Moving Right */}
+            <div className="flex gap-4 animate-scroll-right">
+              {[...popularMovies.slice(20, 30), ...popularMovies.slice(20, 30)].map((poster, i) => (
+                <div key={`row3-${i}`} className="relative flex-shrink-0 w-32 h-48 rounded-lg overflow-hidden">
+                  <Image
+                    src={poster}
+                    alt="Movie"
+                    fill
+                    className="object-cover"
+                    sizes="128px"
+                  />
+                </div>
+              ))}
+            </div>
+          </div>
+
+          {/* Dark Overlay */}
+          <div className="absolute inset-0 bg-black/85 backdrop-blur-sm" />
+
+          {/* Content - Platform Logos and Pricing Tables */}
+          <div className="relative z-10">
+            {/* Platform Logos */}
+            <div className="flex flex-col items-center justify-center mb-12">
+              <div className="flex items-center gap-6 mb-4 flex-wrap justify-center px-4">
+                <div className="relative w-24 h-12">
+                  <Image
+                    src="/ott-logos/netflix.png"
+                    alt="Netflix"
+                    fill
+                    className="object-contain"
+                  />
+                </div>
+                <div className="relative w-24 h-12">
+                  <Image
+                    src="/ott-logos/prime-video.png"
+                    alt="Prime Video"
+                    fill
+                    className="object-contain"
+                  />
+                </div>
+                <div className="relative w-24 h-12">
+                  <Image
+                    src="/ott-logos/jioHotstar.png"
+                    alt="Hotstar"
+                    fill
+                    className="object-contain"
+                  />
+                </div>
+                <div className="relative w-24 h-12">
+                  <Image
+                    src="/ott-logos/zee5.webp"
+                    alt="Zee5"
+                    fill
+                    className="object-contain"
+                  />
+                </div>
+                <div className="relative w-24 h-12">
+                  <Image
+                    src="/ott-logos/hoichoi.png"
+                    alt="Hoichoi"
+                    fill
+                    className="object-contain"
+                  />
+                </div>
+              </div>
+              <p className="text-white text-2xl font-semibold">Included in all plans</p>
+            </div>
+
+            {/* Pricing Cards */}
+            <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8">
+              <div className="grid md:grid-cols-3 gap-4">
           {(Object.keys(planConfig) as SubscriptionPlan[]).map((planKey) => {
             const config = planConfig[planKey];
             const isCurrentPlan = currentPlan === planKey;
@@ -234,113 +337,77 @@ export default function SubscribePage() {
           })}
         </div>
 
-        {/* Footer Note */}
-        <div className="mt-8 text-center">
-          <p className="text-sm text-zinc-500">
-            All plans include unlimited streaming and the ability to cancel anytime
-          </p>
-        </div>
-      </div>
-
-      {/* Movie Posters Background Slider with OTT Logos */}
-      {popularMovies.length > 0 && (
-        <div className="relative w-full overflow-hidden py-16 bg-black">
-          {/* Animated Poster Rows */}
-          <div className="relative space-y-4">
-            {/* Row 1 - Moving Right */}
-            <div className="flex gap-4 animate-scroll-right">
-              {[...popularMovies.slice(0, 10), ...popularMovies.slice(0, 10)].map((poster, i) => (
-                <div key={`row1-${i}`} className="relative flex-shrink-0 w-32 h-48 rounded-lg overflow-hidden">
-                  <Image
-                    src={poster}
-                    alt="Movie"
-                    fill
-                    className="object-cover"
-                    sizes="128px"
-                  />
-                </div>
-              ))}
-            </div>
-
-            {/* Row 2 - Moving Left */}
-            <div className="flex gap-4 animate-scroll-left">
-              {[...popularMovies.slice(10, 20), ...popularMovies.slice(10, 20)].map((poster, i) => (
-                <div key={`row2-${i}`} className="relative flex-shrink-0 w-32 h-48 rounded-lg overflow-hidden">
-                  <Image
-                    src={poster}
-                    alt="Movie"
-                    fill
-                    className="object-cover"
-                    sizes="128px"
-                  />
-                </div>
-              ))}
-            </div>
-
-            {/* Row 3 - Moving Right */}
-            <div className="flex gap-4 animate-scroll-right">
-              {[...popularMovies.slice(20, 30), ...popularMovies.slice(20, 30)].map((poster, i) => (
-                <div key={`row3-${i}`} className="relative flex-shrink-0 w-32 h-48 rounded-lg overflow-hidden">
-                  <Image
-                    src={poster}
-                    alt="Movie"
-                    fill
-                    className="object-cover"
-                    sizes="128px"
-                  />
-                </div>
-              ))}
+              {/* Footer Note */}
+              <div className="mt-8 text-center">
+                <p className="text-sm text-zinc-500">
+                  All plans include unlimited streaming and the ability to cancel anytime
+                </p>
+              </div>
             </div>
           </div>
+        </div>
+      ) : (
+        /* Fallback if no movies loaded */
+        <div className="max-w-7xl mx-auto px-4 sm:px-6 lg:px-8 py-16">
+          <div className="grid md:grid-cols-3 gap-4">
+            {(Object.keys(planConfig) as SubscriptionPlan[]).map((planKey) => {
+              const config = planConfig[planKey];
+              const isCurrentPlan = currentPlan === planKey;
 
-          {/* Dark Overlay */}
-          <div className="absolute inset-0 bg-black/85 backdrop-blur-sm" />
-
-          {/* Platform Logos and Text */}
-          <div className="absolute inset-0 flex flex-col items-center justify-center z-10">
-            <div className="flex items-center gap-6 mb-6 flex-wrap justify-center px-4">
-              <div className="relative w-24 h-12">
-                <Image
-                  src="/ott-logos/netflix.png"
-                  alt="Netflix"
-                  fill
-                  className="object-contain"
-                />
-              </div>
-              <div className="relative w-24 h-12">
-                <Image
-                  src="/ott-logos/prime-video.png"
-                  alt="Prime Video"
-                  fill
-                  className="object-contain"
-                />
-              </div>
-              <div className="relative w-24 h-12">
-                <Image
-                  src="/ott-logos/jioHotstar.png"
-                  alt="Hotstar"
-                  fill
-                  className="object-contain"
-                />
-              </div>
-              <div className="relative w-24 h-12">
-                <Image
-                  src="/ott-logos/zee5.webp"
-                  alt="Zee5"
-                  fill
-                  className="object-contain"
-                />
-              </div>
-              <div className="relative w-24 h-12">
-                <Image
-                  src="/ott-logos/hoichoi.png"
-                  alt="Hoichoi"
-                  fill
-                  className="object-contain"
-                />
-              </div>
-            </div>
-            <p className="text-white text-2xl font-semibold">Included in all plans</p>
+              return (
+                <div
+                  key={planKey}
+                  className="relative rounded-2xl border border-zinc-800 bg-zinc-900/50 p-8 hover:border-zinc-700 transition-colors"
+                >
+                  <h2 className="text-2xl font-semibold text-white mb-6">{config.title}</h2>
+                  <div className="mb-4">
+                    <div className="flex items-baseline gap-1 mb-1">
+                      <span className="text-sm text-zinc-400">₹</span>
+                      <span className="text-5xl font-medium text-white tracking-tight">
+                        {config.price}
+                      </span>
+                    </div>
+                    <p className="text-sm text-zinc-500">
+                      INR / month (inclusive of GST)
+                    </p>
+                  </div>
+                  <p className="text-zinc-400 mb-6">{config.description}</p>
+                  <div className="mb-6 space-y-3">
+                    <div className="flex items-center justify-between p-3 bg-zinc-800/50 rounded-lg">
+                      <span className="text-sm text-zinc-400">Video Quality</span>
+                      <span className="text-sm font-semibold text-white">{config.quality}</span>
+                    </div>
+                    <div className="flex items-center justify-between p-3 bg-zinc-800/50 rounded-lg">
+                      <span className="text-sm text-zinc-400">Devices</span>
+                      <span className="text-sm font-semibold text-white">{config.devices}</span>
+                    </div>
+                  </div>
+                  <Button
+                    onClick={() => handleSelectPlan(planKey)}
+                    disabled={loading || isCurrentPlan}
+                    className={`w-full h-12 rounded-lg font-medium mb-6 transition-all ${
+                      isCurrentPlan
+                        ? "bg-zinc-700 text-zinc-400 cursor-not-allowed hover:bg-zinc-700"
+                        : "bg-white text-black hover:bg-zinc-200"
+                    }`}
+                  >
+                    {loading && selectedPlan === planKey
+                      ? "Processing..."
+                      : isCurrentPlan
+                      ? "Current Plan"
+                      : `Get ${config.title}`}
+                  </Button>
+                  <ul className="space-y-2.5">
+                    {config.features.map((feature, index) => (
+                      <li key={index} className="flex items-start gap-2">
+                        <Check className="w-5 h-5 text-green-500 flex-shrink-0 mt-0.5" />
+                        <span className="text-sm text-zinc-300">{feature}</span>
+                      </li>
+                    ))}
+                  </ul>
+                </div>
+              );
+            })}
           </div>
         </div>
       )}

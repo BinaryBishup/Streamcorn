@@ -43,8 +43,8 @@ interface ContentDetails {
   id: number;
   title?: string;
   name?: string;
-  poster_path: string;
-  backdrop_path: string;
+  poster_path: string | null;
+  backdrop_path: string | null;
   vote_average: number;
 }
 
@@ -374,7 +374,7 @@ export default function AccountPage() {
                 <div className="grid grid-cols-2 md:grid-cols-3 lg:grid-cols-4 gap-4">
                   {watchlist.map((item) => {
                     const content = watchlistContent.get(item.content_id);
-                    if (!content) return null;
+                    if (!content || !content.poster_path) return null;
 
                     return (
                       <div
