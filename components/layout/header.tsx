@@ -15,6 +15,7 @@ import {
   DropdownMenuTrigger,
 } from "@/components/ui/dropdown-menu";
 import Image from "next/image";
+import { deleteCurrentSession } from "@/lib/device-session";
 
 interface Profile {
   id: string;
@@ -73,8 +74,16 @@ export function Header() {
   };
 
   const handleLogout = async () => {
+    // Delete the current device session
+    await deleteCurrentSession();
+
+    // Sign out from Supabase
     await supabase.auth.signOut();
-    localStorage.removeItem("selectedProfile");
+
+    // Clear all local storage
+    localStorage.clear();
+
+    // Redirect to auth page
     router.push("/auth");
   };
 
@@ -206,7 +215,13 @@ export function Header() {
               ))}
               <DropdownMenuSeparator className="bg-gray-800" />
               <DropdownMenuItem asChild className="text-white cursor-pointer">
+                <Link href="/account">Account</Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild className="text-white cursor-pointer">
                 <Link href="/profiles">Manage Profiles</Link>
+              </DropdownMenuItem>
+              <DropdownMenuItem asChild className="text-white cursor-pointer">
+                <Link href="/subscribe">Upgrade Plan</Link>
               </DropdownMenuItem>
               <DropdownMenuSeparator className="bg-gray-800" />
               <DropdownMenuItem

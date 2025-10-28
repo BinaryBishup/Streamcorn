@@ -3,7 +3,7 @@
 import { useEffect, useState, useRef } from "react";
 import { useRouter } from "next/navigation";
 import Image from "next/image";
-import { X, Play, Plus, Volume2, VolumeX, Check } from "lucide-react";
+import { X, Play, Plus, Volume2, VolumeX, Check, Heart } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { ModalSkeletonLoader } from "@/components/ui/skeleton-loader";
 import {
@@ -65,6 +65,8 @@ export function ContentDetailsModal({ contentId, onClose }: ContentDetailsModalP
   const [profileId, setProfileId] = useState<string | null>(null);
   const [trailers, setTrailers] = useState<any[]>([]);
   const [episodeProgress, setEpisodeProgress] = useState<Map<string, number>>(new Map());
+  const [isInWatchlist, setIsInWatchlist] = useState(false);
+  const [watchlistId, setWatchlistId] = useState<string | null>(null);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const videoContainerRef = useRef<HTMLDivElement>(null);
@@ -160,6 +162,78 @@ export function ContentDetailsModal({ contentId, onClose }: ContentDetailsModalP
       loadEpisodes();
     }
   }, [selectedSeason, content]);
+
+  useEffect(() => {
+    // Check if content is in watchlist
+    if (content && profileId) {
+      checkWatchlistStatus();
+    }
+  }, [content, profileId]);
+
+  const checkWatchlistStatus = async () => {
+    if (!content || !profileId) return;
+
+    try {
+      const { data } = await supabase
+        .from("watchlist")
+        .select("id")
+        .eq("profile_id", profileId)
+        .eq("content_id", content.tmdb_id)
+        .single();
+
+      if (data) {
+        setIsInWatchlist(true);
+        setWatchlistId(data.id);
+      } else {
+        setIsInWatchlist(false);
+        setWatchlistId(null);
+      }
+    } catch (error) {
+      // Not in watchlist or error
+      setIsInWatchlist(false);
+      setWatchlistId(null);
+    }
+  };
+
+  const toggleWatchlist = async () => {
+    if (!content || !profileId) return;
+
+    try {
+      if (isInWatchlist && watchlistId) {
+        // Remove from watchlist
+        const { error } = await supabase
+          .from("watchlist")
+          .delete()
+          .eq("id", watchlistId);
+
+        if (error) throw error;
+
+        setIsInWatchlist(false);
+        setWatchlistId(null);
+      } else {
+        // Add to watchlist
+        const { data, error } = await supabase
+          .from("watchlist")
+          .insert({
+            profile_id: profileId,
+            content_id: content.tmdb_id,
+            content_type: content.content_type,
+          })
+          .select("id")
+          .single();
+
+        if (error) throw error;
+
+        if (data) {
+          setIsInWatchlist(true);
+          setWatchlistId(data.id);
+        }
+      }
+    } catch (error) {
+      console.error("Error toggling watchlist:", error);
+      alert("Failed to update watchlist");
+    }
+  };
 
   const loadContent = async () => {
     try {
@@ -700,10 +774,16 @@ export function ContentDetailsModal({ contentId, onClose }: ContentDetailsModalP
                     </Button>
                   </div>
                   <Button
+                    onClick={toggleWatchlist}
                     variant="outline"
-                    className="bg-white/10 hover:bg-white/20 text-white border-white/30 font-semibold p-3 rounded-full"
+                    className="bg-white/10 hover:bg-white/20 text-white border-white/30 font-semibold p-3 rounded-full transition-all"
+                    title={isInWatchlist ? "Remove from Watchlist" : "Add to Watchlist"}
                   >
-                    <Plus className="w-6 h-6" />
+                    {isInWatchlist ? (
+                      <Check className="w-6 h-6" />
+                    ) : (
+                      <Plus className="w-6 h-6" />
+                    )}
                   </Button>
                 </div>
               </div>

@@ -18,6 +18,8 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { PROFILE_AVATARS } from "@/lib/constants";
+import { checkDeviceLimit, createSession } from "@/lib/device-session";
+import { SUBSCRIPTION_PLANS } from "@/lib/subscription";
 
 interface Profile {
   id: string;
@@ -72,9 +74,57 @@ export default function ProfilesPage() {
     }
   };
 
-  const handleSelectProfile = (profileId: string) => {
-    localStorage.setItem("selectedProfile", profileId);
-    router.push("/");
+  const handleSelectProfile = async (profileId: string) => {
+    try {
+      const {
+        data: { user },
+      } = await supabase.auth.getUser();
+
+      if (!user) {
+        router.push("/auth");
+        return;
+      }
+
+      // Get user's subscription
+      const { data: subscription } = await supabase
+        .from("subscriptions")
+        .select("*")
+        .eq("user_id", user.id)
+        .single();
+
+      const deviceLimit = subscription?.device_limit || 1;
+
+      // Check device limit and potentially kick oldest device
+      const { allowed, kickedDevice } = await checkDeviceLimit(user.id, deviceLimit);
+
+      if (!allowed) {
+        alert("Device limit reached. Please log out from another device.");
+        return;
+      }
+
+      // Create/update session for this device
+      const result = await createSession(user.id);
+
+      if (!result.success) {
+        console.error("Failed to create session:", result.error);
+        // Still allow login even if session creation fails
+      }
+
+      // Show notification if a device was kicked
+      if (kickedDevice) {
+        console.log(`Logged out from: ${kickedDevice}`);
+      }
+
+      localStorage.setItem("selectedProfile", profileId);
+      localStorage.setItem("selected_profile_id", profileId);
+      router.push("/");
+    } catch (error) {
+      console.error("Error selecting profile:", error);
+      // Fallback to simple profile selection
+      localStorage.setItem("selectedProfile", profileId);
+      localStorage.setItem("selected_profile_id", profileId);
+      router.push("/");
+    }
   };
 
   const handleEditProfile = (profile: Profile) => {
@@ -245,7 +295,7 @@ export default function ProfilesPage() {
           ))}
 
           {/* Add Profile Button */}
-          {profiles.length < 5 && (
+          {profiles.length < 4 && (
             <div className="group flex flex-col items-center">
               <button
                 onClick={openAddDialog}

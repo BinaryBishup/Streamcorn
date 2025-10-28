@@ -19,19 +19,25 @@ export const SUBSCRIPTION_PLANS = {
     name: 'Basic',
     qualities: ['480p'],
     deviceLimit: 1,
-    price: '$4.99/month',
+    price: '₹280/month',
+    priceValue: 280,
+    description: 'Perfect for solo viewing on one device',
   },
   premium: {
     name: 'Premium',
     qualities: ['480p', '720p'],
     deviceLimit: 2,
-    price: '$9.99/month',
+    price: '₹450/month',
+    priceValue: 450,
+    description: 'Great for couples or small families',
   },
   ultra: {
     name: 'Ultra',
     qualities: ['480p', '720p', '1080p'],
     deviceLimit: 4,
-    price: '$14.99/month',
+    price: '₹650/month',
+    priceValue: 650,
+    description: 'Best for the whole family',
   },
 } as const;
 
