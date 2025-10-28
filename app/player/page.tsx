@@ -110,6 +110,8 @@ function PlayerContent() {
   const [showNextEpisode, setShowNextEpisode] = useState(false);
   const [showNextEpisodeHover, setShowNextEpisodeHover] = useState(false);
   const [savedPosition, setSavedPosition] = useState<number | null>(null);
+  const [autoPlayCountdown, setAutoPlayCountdown] = useState<number | null>(null);
+  const [showAutoPlayOverlay, setShowAutoPlayOverlay] = useState(false);
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -118,6 +120,7 @@ function PlayerContent() {
   const progressUpdateIntervalRef = useRef<NodeJS.Timeout | null>(null);
   const nextEpisodeHoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const currentEpisodeRef = useRef<HTMLDivElement>(null);
+  const autoPlayCountdownRef = useRef<NodeJS.Timeout | null>(null);
 
   const profileId = searchParams.get("profile_id");
   const contentId = searchParams.get("content_id");
@@ -235,11 +238,11 @@ function PlayerContent() {
   }, [videoUrl, loading]);
 
   useEffect(() => {
-    // Auto-save progress every 10 seconds
+    // Auto-save progress every 5 seconds (more frequent for better accuracy)
     if (videoRef.current && content && profileId) {
       progressUpdateIntervalRef.current = setInterval(() => {
         saveProgress();
-      }, 10000);
+      }, 5000);
     }
 
     return () => {
@@ -248,6 +251,104 @@ function PlayerContent() {
       }
     };
   }, [content, profileId, currentTime]);
+
+  // Save progress on critical events and before unload
+  useEffect(() => {
+    const handleBeforeUnload = () => {
+      // Save progress immediately when user is about to leave
+      saveProgress();
+    };
+
+    const handleVisibilityChange = () => {
+      // Save progress when tab becomes hidden
+      if (document.hidden) {
+        saveProgress();
+      }
+    };
+
+    window.addEventListener("beforeunload", handleBeforeUnload);
+    document.addEventListener("visibilitychange", handleVisibilityChange);
+
+    return () => {
+      // Final save on component unmount
+      saveProgress();
+      window.removeEventListener("beforeunload", handleBeforeUnload);
+      document.removeEventListener("visibilitychange", handleVisibilityChange);
+    };
+  }, [content, profileId]);
+
+  // Handle video end and auto-play next episode countdown
+  useEffect(() => {
+    if (!videoRef.current || !duration) return;
+
+    const handleVideoEnd = async () => {
+      // For TV shows/anime, start auto-play countdown
+      if (content?.content_type !== "movie" && currentEpisode < allEpisodes.length) {
+        setShowAutoPlayOverlay(true);
+        setAutoPlayCountdown(5);
+
+        // Start countdown
+        let countdown = 5;
+        autoPlayCountdownRef.current = setInterval(() => {
+          countdown--;
+          setAutoPlayCountdown(countdown);
+
+          if (countdown === 0) {
+            if (autoPlayCountdownRef.current) {
+              clearInterval(autoPlayCountdownRef.current);
+            }
+            setShowAutoPlayOverlay(false);
+            handleNextEpisode();
+          }
+        }, 1000);
+      } else if (content?.content_type === "movie") {
+        // Mark movie as watched
+        await markMovieAsWatched();
+      }
+    };
+
+    const video = videoRef.current;
+    video.addEventListener("ended", handleVideoEnd);
+
+    return () => {
+      video.removeEventListener("ended", handleVideoEnd);
+      if (autoPlayCountdownRef.current) {
+        clearInterval(autoPlayCountdownRef.current);
+      }
+    };
+  }, [content, currentEpisode, allEpisodes.length, duration]);
+
+  // Cancel auto-play countdown handler
+  const cancelAutoPlay = () => {
+    if (autoPlayCountdownRef.current) {
+      clearInterval(autoPlayCountdownRef.current);
+    }
+    setShowAutoPlayOverlay(false);
+    setAutoPlayCountdown(null);
+  };
+
+  // Mark movie as watched in database
+  const markMovieAsWatched = async () => {
+    if (!content || !profileId || content.content_type !== "movie") return;
+
+    try {
+      await supabase.from("watched_content").upsert({
+        profile_id: profileId,
+        content_id: content.tmdb_id,
+        content_type: "movie",
+        completed_at: new Date().toISOString(),
+      });
+
+      // Also mark as completed in continue_watching
+      await supabase
+        .from("continue_watching")
+        .update({ is_completed: true })
+        .eq("profile_id", profileId)
+        .eq("content_uuid", content.id);
+    } catch (error) {
+      console.error("Error marking movie as watched:", error);
+    }
+  };
 
   useEffect(() => {
     // Check for skip intro/credits buttons and next episode preview
@@ -729,7 +830,19 @@ function PlayerContent() {
     if (!position || !totalDuration) return;
 
     try {
-      const completionThreshold = episode?.skip_credits_start || episode?.duration || content.duration || totalDuration;
+      // Improved completion threshold logic
+      let completionThreshold = totalDuration;
+
+      if (episode?.skip_credits_start) {
+        // If skip_credits_start exists, use it as threshold
+        completionThreshold = episode.skip_credits_start;
+      } else if (episode?.duration) {
+        // Otherwise, use 95% of episode duration to account for credits
+        completionThreshold = episode.duration * 0.95;
+      } else if (content.duration) {
+        // For movies, use 95% of total duration
+        completionThreshold = content.duration * 0.95;
+      }
 
       if (content.content_type === "movie") {
         // For movies - call PostgreSQL function
@@ -759,8 +872,8 @@ function PlayerContent() {
           p_completion_threshold: completionThreshold,
         });
 
-        // Also update watched_episodes table if completed
-        const isCompleted = position >= completionThreshold * 0.9;
+        // Also update watched_episodes table if completed (95% threshold)
+        const isCompleted = position >= completionThreshold * 0.95;
         if (isCompleted) {
           await supabase.from("watched_episodes").upsert({
             profile_id: profileId,
@@ -795,8 +908,8 @@ function PlayerContent() {
             p_completion_threshold: completionThreshold,
           });
 
-          // Also update watched_episodes table if completed
-          const isCompleted = position >= completionThreshold * 0.9;
+          // Also update watched_episodes table if completed (95% threshold)
+          const isCompleted = position >= completionThreshold * 0.95;
           if (isCompleted) {
             await supabase.from("watched_episodes").upsert({
               profile_id: profileId,
@@ -815,13 +928,20 @@ function PlayerContent() {
 
   const handleBack = async () => {
     await saveProgress();
-    router.back();
+    // Navigate to homepage with content modal opened
+    if (contentId) {
+      router.push(`/?content=${contentId}`);
+    } else {
+      router.push("/");
+    }
   };
 
   const togglePlay = () => {
     if (videoRef.current) {
       if (playing) {
         videoRef.current.pause();
+        // Save progress immediately when pausing
+        saveProgress();
       } else {
         videoRef.current.play();
       }
@@ -878,12 +998,16 @@ function PlayerContent() {
       const bounds = e.currentTarget.getBoundingClientRect();
       const percent = (e.clientX - bounds.left) / bounds.width;
       videoRef.current.currentTime = percent * videoRef.current.duration;
+      // Save progress immediately after seeking
+      setTimeout(() => saveProgress(), 500);
     }
   };
 
   const skip = (seconds: number) => {
     if (videoRef.current) {
       videoRef.current.currentTime += seconds;
+      // Save progress after skipping
+      setTimeout(() => saveProgress(), 500);
     }
   };
 
@@ -932,6 +1056,9 @@ function PlayerContent() {
   const handleNextEpisode = async () => {
     if (!content || content.content_type === "movie") return;
 
+    // Save progress before switching episodes
+    await saveProgress();
+
     const nextEpisodeNum = currentEpisode + 1;
     const nextEpisode = allEpisodes.find((ep) => ep.episode_number === nextEpisodeNum);
 
@@ -972,6 +1099,9 @@ function PlayerContent() {
   };
 
   const handleEpisodeClick = async (episodeNum: number) => {
+    // Save progress before switching episodes
+    await saveProgress();
+
     // Find episode ID from database
     const { data: episodeData } = await supabase
       .from("episodes")
@@ -1055,9 +1185,9 @@ function PlayerContent() {
         </div>
       </div>
 
-      {/* Skip Intro Button */}
+      {/* Skip Intro Button - Bottom Left */}
       {showSkipIntro && (
-        <div className="absolute bottom-32 right-12 z-50">
+        <div className="absolute bottom-32 left-12 z-50">
           <button
             onClick={skipIntro}
             className="bg-white/20 hover:bg-white/30 backdrop-blur-sm text-white px-8 py-3 rounded-sm text-lg font-semibold transition-all duration-200 border border-white/40"
@@ -1076,6 +1206,41 @@ function PlayerContent() {
           >
             Next Episode
           </button>
+        </div>
+      )}
+
+      {/* Auto-Play Next Episode Overlay */}
+      {showAutoPlayOverlay && allEpisodes[currentEpisode] && (
+        <div className="absolute inset-0 bg-black/60 flex items-center justify-center z-50">
+          <div className="bg-[#181818] rounded-lg p-8 max-w-md w-full mx-4 shadow-2xl border border-gray-700">
+            {/* Next Episode Info */}
+            <div className="mb-6">
+              <h3 className="text-white text-xl font-semibold mb-2">Next Episode</h3>
+              <div className="flex items-start gap-3">
+                <span className="text-white text-lg font-bold">{allEpisodes[currentEpisode].episode_number}</span>
+                <div className="flex-1">
+                  <h4 className="text-white font-semibold">{allEpisodes[currentEpisode].name}</h4>
+                  {allEpisodes[currentEpisode].runtime && (
+                    <span className="text-gray-400 text-sm">{allEpisodes[currentEpisode].runtime}m</span>
+                  )}
+                </div>
+              </div>
+            </div>
+
+            {/* Countdown */}
+            <div className="mb-6 text-center">
+              <div className="text-6xl font-bold text-white mb-2">{autoPlayCountdown}</div>
+              <p className="text-gray-400">Playing next episode...</p>
+            </div>
+
+            {/* Cancel Button */}
+            <button
+              onClick={cancelAutoPlay}
+              className="w-full bg-white hover:bg-gray-200 text-black font-semibold py-3 rounded transition-colors"
+            >
+              Cancel
+            </button>
+          </div>
         </div>
       )}
 

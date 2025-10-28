@@ -145,8 +145,14 @@ const ContinueWatchingRowComponent = ({ items, onItemClick }: ContinueWatchingRo
 
   const getProgressText = (item: ContinueWatchingItem) => {
     const isTVContent = item.content.content_type === "tv" || item.content.content_type === "anime";
-    if (isTVContent && item.season_number && item.episode_number) {
-      return `S${item.season_number}:E${item.episode_number}`;
+    if (isTVContent) {
+      // Use season_number/episode_number if available, otherwise fall back to current_season/current_episode
+      const season = item.season_number || item.current_season;
+      const episode = item.episode_number || item.current_episode;
+
+      if (season && episode) {
+        return `S${season}:E${episode}`;
+      }
     }
     return null;
   };
@@ -238,14 +244,14 @@ const ContinueWatchingRowComponent = ({ items, onItemClick }: ContinueWatchingRo
                     )}
                   </div>
 
-                  {/* Episode info and progress */}
+                  {/* Episode info and progress - enhanced visibility */}
                   {progressText && (
-                    <div className="absolute top-4 right-4 flex flex-col items-end gap-1">
-                      <p className="text-white text-sm font-medium bg-black/70 px-2 py-1 rounded backdrop-blur-sm">
+                    <div className="absolute top-4 right-4 flex flex-col items-end gap-1.5">
+                      <p className="text-white text-base font-semibold bg-black/80 px-3 py-1.5 rounded-md backdrop-blur-sm border border-white/10">
                         {progressText}
                       </p>
                       {item.watchedEpisodesCount !== undefined && item.totalEpisodesCount !== undefined && (
-                        <p className="text-white text-xs bg-black/70 px-2 py-1 rounded backdrop-blur-sm">
+                        <p className="text-white/90 text-xs font-medium bg-black/70 px-2.5 py-1 rounded-md backdrop-blur-sm">
                           {item.watchedEpisodesCount}/{item.totalEpisodesCount} watched
                         </p>
                       )}
@@ -259,10 +265,10 @@ const ContinueWatchingRowComponent = ({ items, onItemClick }: ContinueWatchingRo
                     </div>
                   </div>
 
-                  {/* Progress bar at bottom */}
-                  <div className="absolute bottom-0 left-0 right-0 h-1 bg-gray-700">
+                  {/* Progress bar at bottom - enhanced visibility */}
+                  <div className="absolute bottom-0 left-0 right-0 h-1.5 bg-gray-600/80">
                     <div
-                      className="h-full bg-red-600"
+                      className="h-full bg-red-600 transition-all"
                       style={{ width: `${progress}%` }}
                     />
                   </div>

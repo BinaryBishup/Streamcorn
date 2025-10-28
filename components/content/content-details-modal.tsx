@@ -51,7 +51,7 @@ export function ContentDetailsModal({ contentId, onClose }: ContentDetailsModalP
   const [details, setDetails] = useState<any>(null);
   const [logoPath, setLogoPath] = useState<string | null>(null);
   const [showVideo, setShowVideo] = useState(false);
-  const [isMuted, setIsMuted] = useState(false);
+  const [isMuted, setIsMuted] = useState(true);
   const [seasons, setSeasons] = useState<TMDBSeason[]>([]);
   const [selectedSeason, setSelectedSeason] = useState<number>(1);
   const [episodes, setEpisodes] = useState<TMDBEpisode[]>([]);
@@ -98,6 +98,17 @@ export function ContentDetailsModal({ contentId, onClose }: ContentDetailsModalP
       return () => clearTimeout(timer);
     }
   }, [content?.clip, trailers, showVideo]);
+
+  // Auto-unmute after video starts playing (Netflix-style)
+  useEffect(() => {
+    if (showVideo) {
+      // Wait 1 second for video to start, then unmute
+      const unmuteTimer = setTimeout(() => {
+        setIsMuted(false);
+      }, 1000);
+      return () => clearTimeout(unmuteTimer);
+    }
+  }, [showVideo]);
 
   useEffect(() => {
     // Pause video when not in view using Intersection Observer
@@ -507,13 +518,12 @@ export function ContentDetailsModal({ contentId, onClose }: ContentDetailsModalP
     router.push(`/player?${params.toString()}`);
   };
 
-  const handlePlayEpisode = (seasonNumber: number, episodeNumber: number, episodeId: string) => {
+  const handlePlayEpisode = (seasonNumber: number, episodeNumber: number) => {
     if (!content || !profileId) return;
 
     const params = new URLSearchParams({
       profile_id: profileId,
       content_id: content.id,
-      episode_id: episodeId,
       season_number: seasonNumber.toString(),
       episode_number: episodeNumber.toString(),
     });
@@ -762,7 +772,7 @@ export function ContentDetailsModal({ contentId, onClose }: ContentDetailsModalP
                       return (
                         <div
                           key={episode.id}
-                          onClick={() => handlePlayEpisode(selectedSeason, episode.episode_number, String(episode.id))}
+                          onClick={() => handlePlayEpisode(selectedSeason, episode.episode_number)}
                           className="flex gap-4 bg-gray-900/50 rounded-lg overflow-hidden hover:bg-gray-900/70 transition-colors cursor-pointer"
                         >
                           {/* Episode Thumbnail */}
