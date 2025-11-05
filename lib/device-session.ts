@@ -124,7 +124,7 @@ export async function createSession(userId: string): Promise<{ success: boolean;
     const ipAddress = await getUserIP();
 
     // Use upsert to handle existing sessions automatically
-    // onConflict: device_fingerprint - updates if exists, inserts if not
+    // onConflict: user_id,device_fingerprint - updates if exists, inserts if not
     const { data, error } = await supabase
       .from("user_sessions")
       .upsert(
@@ -137,7 +137,7 @@ export async function createSession(userId: string): Promise<{ success: boolean;
           user_agent: navigator.userAgent,
           last_activity: new Date().toISOString(),
         },
-        { onConflict: "device_fingerprint" }
+        { onConflict: "user_id,device_fingerprint" }
       )
       .select()
       .single();
