@@ -3,7 +3,7 @@
 import { useEffect, useState } from "react";
 import { createClient } from "@/lib/supabase/client";
 import { useRouter } from "next/navigation";
-import { Pencil, Plus, Sparkles, Loader2 } from "lucide-react";
+import { Pencil, Plus, Sparkles, Loader2, Monitor, Smartphone, Tablet, Tv } from "lucide-react";
 import Image from "next/image";
 import {
   Dialog,
@@ -18,7 +18,7 @@ import { Input } from "@/components/ui/input";
 import { Label } from "@/components/ui/label";
 import { Checkbox } from "@/components/ui/checkbox";
 import { PROFILE_AVATARS } from "@/lib/constants";
-import { checkDeviceLimit, createSession } from "@/lib/device-session";
+import { checkDeviceLimit, createSession, deleteSession, type UserSession } from "@/lib/device-session";
 import { SUBSCRIPTION_PLANS } from "@/lib/subscription";
 
 interface Profile {
@@ -40,6 +40,10 @@ export default function ProfilesPage() {
   const [editIsKids, setEditIsKids] = useState(false);
   const [isSaving, setIsSaving] = useState(false);
   const [isCreating, setIsCreating] = useState(false);
+  const [deviceSessionsDialogOpen, setDeviceSessionsDialogOpen] = useState(false);
+  const [activeSessions, setActiveSessions] = useState<UserSession[]>([]);
+  const [pendingProfileId, setPendingProfileId] = useState<string | null>(null);
+  const [isLoggingOut, setIsLoggingOut] = useState(false);
   const router = useRouter();
   const supabase = createClient();
 
@@ -94,11 +98,14 @@ export default function ProfilesPage() {
 
       const deviceLimit = subscription?.device_limit || 1;
 
-      // Check device limit and potentially kick oldest device
-      const { allowed, kickedDevice } = await checkDeviceLimit(user.id, deviceLimit);
+      // Check device limit
+      const { allowed, sessions } = await checkDeviceLimit(user.id, deviceLimit);
 
-      if (!allowed) {
-        alert("Device limit reached. Please log out from another device.");
+      if (!allowed && sessions) {
+        // Show dialog with active sessions
+        setActiveSessions(sessions);
+        setPendingProfileId(profileId);
+        setDeviceSessionsDialogOpen(true);
         return;
       }
 
@@ -110,11 +117,6 @@ export default function ProfilesPage() {
         // Still allow login even if session creation fails
       }
 
-      // Show notification if a device was kicked
-      if (kickedDevice) {
-        console.log(`Logged out from: ${kickedDevice}`);
-      }
-
       localStorage.setItem("selectedProfile", profileId);
       localStorage.setItem("selected_profile_id", profileId);
       router.push("/");
@@ -124,6 +126,40 @@ export default function ProfilesPage() {
       localStorage.setItem("selectedProfile", profileId);
       localStorage.setItem("selected_profile_id", profileId);
       router.push("/");
+    }
+  };
+
+  const handleLogoutSession = async (sessionId: string) => {
+    if (isLoggingOut) return;
+
+    try {
+      setIsLoggingOut(true);
+      const success = await deleteSession(sessionId);
+
+      if (success && pendingProfileId) {
+        // Session logged out successfully, now login with pending profile
+        setDeviceSessionsDialogOpen(false);
+
+        const {
+          data: { user },
+        } = await supabase.auth.getUser();
+
+        if (user) {
+          const result = await createSession(user.id);
+          if (!result.success) {
+            console.error("Failed to create session:", result.error);
+          }
+        }
+
+        localStorage.setItem("selectedProfile", pendingProfileId);
+        localStorage.setItem("selected_profile_id", pendingProfileId);
+        router.push("/");
+      }
+    } catch (error) {
+      console.error("Error logging out session:", error);
+      alert("Failed to log out device. Please try again.");
+    } finally {
+      setIsLoggingOut(false);
     }
   };
 
@@ -219,6 +255,34 @@ export default function ProfilesPage() {
     setEditAvatar(PROFILE_AVATARS[0]);
     setEditIsKids(false);
     setAddDialogOpen(true);
+  };
+
+  const getDeviceIcon = (deviceType: string) => {
+    switch (deviceType) {
+      case "mobile":
+        return <Smartphone className="w-8 h-8" />;
+      case "tablet":
+        return <Tablet className="w-8 h-8" />;
+      case "tv":
+        return <Tv className="w-8 h-8" />;
+      default:
+        return <Monitor className="w-8 h-8" />;
+    }
+  };
+
+  const formatLastActivity = (timestamp: string) => {
+    const date = new Date(timestamp);
+    const now = new Date();
+    const diffMs = now.getTime() - date.getTime();
+    const diffMins = Math.floor(diffMs / 60000);
+    const diffHours = Math.floor(diffMins / 60);
+    const diffDays = Math.floor(diffHours / 24);
+
+    if (diffMins < 5) return "Active now";
+    if (diffMins < 60) return `${diffMins} minutes ago`;
+    if (diffHours < 24) return `${diffHours} hour${diffHours > 1 ? 's' : ''} ago`;
+    if (diffDays < 7) return `${diffDays} day${diffDays > 1 ? 's' : ''} ago`;
+    return date.toLocaleDateString();
   };
 
   if (loading) {
@@ -475,6 +539,67 @@ export default function ProfilesPage() {
               ) : (
                 "Create Profile"
               )}
+            </Button>
+          </DialogFooter>
+        </DialogContent>
+      </Dialog>
+
+      {/* Device Sessions Dialog */}
+      <Dialog open={deviceSessionsDialogOpen} onOpenChange={setDeviceSessionsDialogOpen}>
+        <DialogContent className="bg-gray-900 text-white border-gray-800 max-w-2xl">
+          <DialogHeader>
+            <DialogTitle className="text-2xl">Device Limit Reached</DialogTitle>
+            <DialogDescription className="text-gray-400">
+              You've reached the maximum number of devices for your plan. Please log out from one of the devices below to continue.
+            </DialogDescription>
+          </DialogHeader>
+
+          <div className="space-y-3 max-h-[400px] overflow-y-auto">
+            {activeSessions.map((session) => (
+              <div
+                key={session.id}
+                className="flex items-center gap-4 p-4 bg-gray-800 rounded-lg border border-gray-700 hover:border-gray-600 transition-colors"
+              >
+                <div className="text-gray-300">
+                  {getDeviceIcon(session.device_type)}
+                </div>
+                <div className="flex-1 min-w-0">
+                  <h4 className="text-white font-medium truncate">{session.device_name}</h4>
+                  <p className="text-sm text-gray-400">{formatLastActivity(session.last_activity)}</p>
+                  {session.ip_address && (
+                    <p className="text-xs text-gray-500 mt-1">IP: {session.ip_address}</p>
+                  )}
+                </div>
+                <Button
+                  onClick={() => handleLogoutSession(session.id)}
+                  variant="destructive"
+                  size="sm"
+                  disabled={isLoggingOut}
+                  className="bg-red-600 hover:bg-red-700"
+                >
+                  {isLoggingOut ? (
+                    <>
+                      <Loader2 className="w-4 h-4 mr-2 animate-spin" />
+                      Logging out...
+                    </>
+                  ) : (
+                    "Log Out"
+                  )}
+                </Button>
+              </div>
+            ))}
+          </div>
+
+          <DialogFooter>
+            <Button
+              variant="outline"
+              onClick={() => {
+                setDeviceSessionsDialogOpen(false);
+                setPendingProfileId(null);
+              }}
+              className="bg-gray-800 text-white border-gray-700 hover:bg-gray-700"
+            >
+              Cancel
             </Button>
           </DialogFooter>
         </DialogContent>

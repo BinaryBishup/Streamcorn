@@ -156,12 +156,12 @@ export async function createSession(userId: string): Promise<{ success: boolean;
 }
 
 /**
- * Check if user has reached device limit and handle accordingly
+ * Check if user has reached device limit and return sessions
  */
 export async function checkDeviceLimit(
   userId: string,
   deviceLimit: number
-): Promise<{ allowed: boolean; kickedDevice?: string }> {
+): Promise<{ allowed: boolean; sessions?: UserSession[]; isCurrentDevice?: boolean }> {
   const supabase = createClient();
 
   try {
@@ -170,7 +170,7 @@ export async function checkDeviceLimit(
       .from("user_sessions")
       .select("*")
       .eq("user_id", userId)
-      .order("last_activity", { ascending: true });
+      .order("last_activity", { ascending: false });
 
     if (error) throw error;
 
@@ -183,19 +183,13 @@ export async function checkDeviceLimit(
 
     if (currentDeviceSession) {
       // Current device already logged in, allow
-      return { allowed: true };
+      return { allowed: true, isCurrentDevice: true };
     }
 
     // Check if limit is reached
     if (sessions && sessions.length >= deviceLimit) {
-      // Kick the oldest device (first in the sorted list)
-      const oldestSession = sessions[0];
-      await supabase
-        .from("user_sessions")
-        .delete()
-        .eq("id", oldestSession.id);
-
-      return { allowed: true, kickedDevice: oldestSession.device_name };
+      // Return sessions list so user can choose which to logout
+      return { allowed: false, sessions };
     }
 
     return { allowed: true };
