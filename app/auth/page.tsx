@@ -8,9 +8,9 @@ import { useRouter } from "next/navigation";
 import { Sparkles } from "lucide-react";
 
 export default function AuthPage() {
-  const [phone, setPhone] = useState("");
+  const [email, setEmail] = useState("");
   const [otp, setOtp] = useState("");
-  const [step, setStep] = useState<"phone" | "otp">("phone");
+  const [step, setStep] = useState<"email" | "otp">("email");
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState("");
   const router = useRouter();
@@ -22,10 +22,8 @@ export default function AuthPage() {
     setError("");
 
     try {
-      const formattedPhone = phone.startsWith("+91") ? phone : `+91${phone}`;
-
       const { error } = await supabase.auth.signInWithOtp({
-        phone: formattedPhone,
+        email: email,
       });
 
       if (error) throw error;
@@ -44,12 +42,10 @@ export default function AuthPage() {
     setError("");
 
     try {
-      const formattedPhone = phone.startsWith("+91") ? phone : `+91${phone}`;
-
       const { error } = await supabase.auth.verifyOtp({
-        phone: formattedPhone,
+        email: email,
         token: otp,
-        type: "sms",
+        type: "email",
       });
 
       if (error) throw error;
@@ -77,9 +73,9 @@ export default function AuthPage() {
             Login or sign up to continue
           </h2>
           <p className="text-gray-400 text-sm mb-8">
-            {step === "phone"
-              ? "Enter mobile number to login"
-              : "Enter the OTP sent to your mobile"}
+            {step === "email"
+              ? "Enter your email address to login"
+              : "Enter the OTP sent to your email"}
           </p>
 
           {error && (
@@ -88,26 +84,20 @@ export default function AuthPage() {
             </div>
           )}
 
-          {step === "phone" ? (
+          {step === "email" ? (
             <form onSubmit={handleSendOTP} className="space-y-6">
               <div>
                 <label className="text-sm text-gray-400 mb-2 block">
-                  Enter mobile number
+                  Enter email address
                 </label>
-                <div className="flex gap-2">
-                  <div className="bg-gray-900 border border-gray-700 rounded-md px-4 py-2 text-white flex items-center">
-                    +91
-                  </div>
-                  <Input
-                    type="tel"
-                    placeholder="9876543210"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value.replace(/\D/g, ""))}
-                    maxLength={10}
-                    className="flex-1 bg-gray-900 border-gray-700 text-white placeholder:text-gray-500 focus:border-red-600"
-                    required
-                  />
-                </div>
+                <Input
+                  type="email"
+                  placeholder="your.email@example.com"
+                  value={email}
+                  onChange={(e) => setEmail(e.target.value.trim())}
+                  className="bg-gray-900 border-gray-700 text-white placeholder:text-gray-500 focus:border-red-600"
+                  required
+                />
                 <p className="text-xs text-gray-500 mt-2">
                   By proceeding you confirm that you are above 18 years of age
                   and agree to the Privacy Policy & Terms of Use.
@@ -117,7 +107,7 @@ export default function AuthPage() {
               <Button
                 type="submit"
                 className="w-full bg-red-600 hover:bg-red-700 text-white font-medium h-12 text-base"
-                disabled={loading || phone.length !== 10}
+                disabled={loading || !email}
               >
                 {loading ? "Sending OTP..." : "Continue"}
               </Button>
@@ -147,7 +137,7 @@ export default function AuthPage() {
                   required
                 />
                 <p className="text-xs text-gray-500 mt-2">
-                  OTP sent to +91{phone}
+                  OTP sent to {email}
                 </p>
               </div>
 
@@ -163,13 +153,13 @@ export default function AuthPage() {
                 <button
                   type="button"
                   onClick={() => {
-                    setStep("phone");
+                    setStep("email");
                     setOtp("");
                     setError("");
                   }}
                   className="text-gray-400 hover:text-white"
                 >
-                  Change number
+                  Change email
                 </button>
                 <button
                   type="button"

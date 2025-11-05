@@ -67,9 +67,12 @@ export function ContentDetailsModal({ contentId, onClose }: ContentDetailsModalP
   const [episodeProgress, setEpisodeProgress] = useState<Map<string, number>>(new Map());
   const [isInWatchlist, setIsInWatchlist] = useState(false);
   const [watchlistId, setWatchlistId] = useState<string | null>(null);
+  const [isVideoVisible, setIsVideoVisible] = useState(true);
 
   const videoRef = useRef<HTMLVideoElement>(null);
+  const iframeRef = useRef<HTMLIFrameElement>(null);
   const videoContainerRef = useRef<HTMLDivElement>(null);
+  const modalScrollRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
     loadContent();
@@ -114,47 +117,60 @@ export function ContentDetailsModal({ contentId, onClose }: ContentDetailsModalP
 
   useEffect(() => {
     // Pause video when not in view using Intersection Observer, or when window is not active
-    if (!videoContainerRef.current) return;
+    if (!videoContainerRef.current || !modalScrollRef.current) return;
 
     const observer = new IntersectionObserver(
       (entries) => {
         entries.forEach((entry) => {
-          if (videoRef.current) {
-            if (!entry.isIntersecting) {
-              // Video is not in view, pause it
+          if (entry.isIntersecting) {
+            // Video is back in view, show and autoplay it
+            setIsVideoVisible(true);
+          } else {
+            // Video is not in view, hide it
+            setIsVideoVisible(false);
+            // Pause HTML5 video if present
+            if (videoRef.current) {
               videoRef.current.pause();
             }
           }
         });
       },
       {
-        threshold: 0.5, // Trigger when 50% of video is out of view
+        threshold: 0.3, // Trigger when 30% of video is out of view
       }
     );
 
-    // Pause video when window/tab is not active or when user scrolls
+    // Pause video when window/tab is not active
     const handleVisibilityChange = () => {
-      if (videoRef.current && document.hidden) {
-        videoRef.current.pause();
-      }
-    };
-
-    const handleScroll = () => {
-      if (videoRef.current && showVideo) {
-        videoRef.current.pause();
+      if (document.hidden) {
+        // Hide video when tab is not active
+        setIsVideoVisible(false);
+        // Pause HTML5 video
+        if (videoRef.current) {
+          videoRef.current.pause();
+        }
+        // Also mute on tab switch for better UX
+        setIsMuted(true);
+      } else {
+        // When tab becomes active again and video is in view, show it
+        if (videoContainerRef.current) {
+          const rect = videoContainerRef.current.getBoundingClientRect();
+          const modalRect = modalScrollRef.current?.getBoundingClientRect();
+          if (modalRect && rect.top < modalRect.bottom && rect.bottom > modalRect.top) {
+            setIsVideoVisible(true);
+          }
+        }
       }
     };
 
     observer.observe(videoContainerRef.current);
     document.addEventListener("visibilitychange", handleVisibilityChange);
-    window.addEventListener("scroll", handleScroll);
 
     return () => {
       observer.disconnect();
       document.removeEventListener("visibilitychange", handleVisibilityChange);
-      window.removeEventListener("scroll", handleScroll);
     };
-  }, [showVideo]);
+  }, [showVideo, trailers]);
 
   useEffect(() => {
     // Load episodes when season changes (for TV shows)
@@ -645,6 +661,7 @@ export function ContentDetailsModal({ contentId, onClose }: ContentDetailsModalP
 
   return (
     <div
+      ref={modalScrollRef}
       className="fixed inset-0 z-50 overflow-y-auto bg-black/90 animate-in fade-in duration-300"
       onClick={handleClose}
     >
@@ -663,7 +680,7 @@ export function ContentDetailsModal({ contentId, onClose }: ContentDetailsModalP
 
           {/* Hero Section */}
           <div ref={videoContainerRef} className="relative w-full aspect-video">
-            {showVideo && content?.clip ? (
+            {showVideo && isVideoVisible && content?.clip ? (
               <div className="relative w-full h-full">
                 <video
                   ref={videoRef}
@@ -686,9 +703,10 @@ export function ContentDetailsModal({ contentId, onClose }: ContentDetailsModalP
                   )}
                 </button>
               </div>
-            ) : showVideo && trailers.length > 0 ? (
+            ) : showVideo && isVideoVisible && trailers.length > 0 ? (
               <div className="relative w-full h-full">
                 <iframe
+                  ref={iframeRef}
                   className="absolute inset-0 w-full h-full"
                   src={`https://www.youtube.com/embed/${trailers[0].key}?autoplay=1&mute=${isMuted ? 1 : 0}&controls=0&modestbranding=1&rel=0&showinfo=0`}
                   title={trailers[0].name}

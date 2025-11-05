@@ -1,11 +1,12 @@
 "use client";
 
 import { useState, useEffect, useRef } from "react";
-import { useSearchParams } from "next/navigation";
+import { useSearchParams, useRouter } from "next/navigation";
 import Image from "next/image";
 import { Play, Info, ChevronLeft, ChevronRight, Volume2, VolumeX } from "lucide-react";
 import { Button } from "@/components/ui/button";
 import { fetchMovieImages, fetchTVShowImages, getTMDBImageUrl } from "@/lib/tmdb";
+import { getWatchProgress, isContentCompleted, type WatchProgress } from "@/lib/watch-progress";
 
 interface FeaturedItem {
   id: string;
@@ -24,10 +25,12 @@ interface FeaturedSliderProps {
   autoPlayInterval?: number;
   onItemClick?: (item: FeaturedItem) => void;
   onPlayClick?: (item: FeaturedItem) => void;
+  profileId?: string | null;
 }
 
-export function FeaturedSlider({ items, autoPlayInterval = 5000, onItemClick, onPlayClick }: FeaturedSliderProps) {
+export function FeaturedSlider({ items, autoPlayInterval = 5000, onItemClick, onPlayClick, profileId }: FeaturedSliderProps) {
   const searchParams = useSearchParams();
+  const router = useRouter();
   const [currentIndex, setCurrentIndex] = useState(0);
   const [isPaused, setIsPaused] = useState(false);
   const [showTrailer, setShowTrailer] = useState(false);
@@ -36,6 +39,7 @@ export function FeaturedSlider({ items, autoPlayInterval = 5000, onItemClick, on
   const [trailerEnded, setTrailerEnded] = useState(false);
   const [logoPath, setLogoPath] = useState<string | null>(null);
   const [isModalOpen, setIsModalOpen] = useState(false);
+  const [watchProgress, setWatchProgress] = useState<WatchProgress | null>(null);
   const containerRef = useRef<HTMLDivElement>(null);
 
   // Check if modal is open by checking URL params
@@ -130,6 +134,100 @@ export function FeaturedSlider({ items, autoPlayInterval = 5000, onItemClick, on
 
     fetchLogo();
   }, [currentIndex, items]);
+
+  // Load watch progress for current item
+  useEffect(() => {
+    const currentItem = items[currentIndex];
+    if (!currentItem || !profileId) {
+      setWatchProgress(null);
+      return;
+    }
+
+    const loadProgress = async () => {
+      try {
+        const progress = await getWatchProgress(currentItem.id, profileId);
+        setWatchProgress(progress);
+      } catch (error) {
+        console.error("Error loading watch progress:", error);
+        setWatchProgress(null);
+      }
+    };
+
+    loadProgress();
+  }, [currentIndex, items, profileId]);
+
+  const getWatchButtonInfo = () => {
+    if (!watchProgress) {
+      return { text: "Play", icon: Play };
+    }
+
+    const currentSeason = watchProgress.current_season || watchProgress.season_number;
+    const currentEpisode = watchProgress.current_episode || watchProgress.episode_number;
+    const currentPosition = watchProgress.current_position || watchProgress.last_position;
+
+    const isCompleted = isContentCompleted(currentPosition, watchProgress.duration);
+    const isTVContent = currentItem.type === "tv" || currentItem.type === "anime";
+
+    if (isTVContent && currentSeason && currentEpisode) {
+      // For TV shows, show episode info
+      if (isCompleted) {
+        return {
+          text: `Play S${currentSeason}:E${currentEpisode + 1}`,
+          icon: Play,
+        };
+      }
+      return {
+        text: `Resume S${currentSeason}:E${currentEpisode}`,
+        icon: Play,
+      };
+    }
+
+    // For movies
+    return {
+      text: currentPosition > 0 && !isCompleted ? "Resume" : "Play",
+      icon: Play,
+    };
+  };
+
+  const handlePlayContent = () => {
+    if (!currentItem || !profileId) return;
+
+    const isTVContent = currentItem.type === "tv" || currentItem.type === "anime";
+
+    // Build URL parameters
+    const params = new URLSearchParams({
+      profile_id: profileId,
+      content_id: currentItem.id,
+    });
+
+    // For TV shows, determine which episode to play
+    if (isTVContent) {
+      const currentSeason = watchProgress?.current_season || watchProgress?.season_number;
+      const currentEpisode = watchProgress?.current_episode || watchProgress?.episode_number;
+      const currentPosition = watchProgress?.current_position || watchProgress?.last_position || 0;
+
+      if (currentSeason && currentEpisode) {
+        // Check if current episode is completed
+        const isCompleted = isContentCompleted(currentPosition, watchProgress?.duration || 0);
+
+        if (isCompleted) {
+          // Play next episode
+          params.append("season_number", currentSeason.toString());
+          params.append("episode_number", (currentEpisode + 1).toString());
+        } else {
+          // Continue current episode
+          params.append("season_number", currentSeason.toString());
+          params.append("episode_number", currentEpisode.toString());
+        }
+      } else {
+        // Start from S1E1
+        params.append("season_number", "1");
+        params.append("episode_number", "1");
+      }
+    }
+
+    router.push(`/player?${params.toString()}`);
+  };
 
   if (items.length === 0) return null;
 
@@ -282,11 +380,11 @@ export function FeaturedSlider({ items, autoPlayInterval = 5000, onItemClick, on
         {/* Action Buttons */}
         <div className="flex gap-3">
           <Button
-            onClick={() => onPlayClick?.(currentItem)}
+            onClick={handlePlayContent}
             className="bg-white hover:bg-white/90 text-black font-semibold px-6 md:px-8 py-2 md:py-3 text-base md:text-lg rounded"
           >
             <Play className="w-5 h-5 md:w-6 md:h-6 mr-2" fill="currentColor" />
-            Play
+            {getWatchButtonInfo().text}
           </Button>
           <Button
             onClick={() => onItemClick?.(currentItem)}
