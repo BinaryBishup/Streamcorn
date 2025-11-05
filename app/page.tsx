@@ -301,7 +301,6 @@ function HomePageContent() {
                 // Open modal with auto-play enabled
                 handleContentClick(item);
               }}
-              profileId={profileId}
             />
           </div>
         )}
