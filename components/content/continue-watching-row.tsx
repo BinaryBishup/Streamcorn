@@ -185,7 +185,10 @@ const ContinueWatchingRowComponent = ({ items, onItemClick }: ContinueWatchingRo
         className="flex gap-2 overflow-x-auto overflow-y-visible scrollbar-hide px-4 md:px-16 scroll-smooth py-12"
       >
         {itemsWithMetadata.map((item, index) => {
-          const progress = calculateProgress(item.last_position, item.duration);
+          // For TV shows, use current_position if available, otherwise fall back to last_position
+          const isTVContent = item.content.content_type === "tv" || item.content.content_type === "anime";
+          const position = isTVContent && item.current_position !== null ? item.current_position : item.last_position;
+          const progress = calculateProgress(position, item.duration);
           const progressText = getProgressText(item);
 
           return (
