@@ -120,40 +120,25 @@ export async function createSession(userId: string): Promise<{ success: boolean;
   const fingerprint = generateDeviceFingerprint();
 
   try {
-    // Check if session already exists for this device
-    const { data: existingSession } = await supabase
-      .from("user_sessions")
-      .select("*")
-      .eq("device_fingerprint", fingerprint)
-      .eq("user_id", userId)
-      .single();
-
-    if (existingSession) {
-      // Update existing session
-      await supabase
-        .from("user_sessions")
-        .update({ last_activity: new Date().toISOString() })
-        .eq("id", existingSession.id);
-
-      localStorage.setItem("device_fingerprint", fingerprint);
-      localStorage.setItem("session_id", existingSession.id);
-      return { success: true };
-    }
-
     // Get IP address
     const ipAddress = await getUserIP();
 
-    // Create new session
+    // Use upsert to handle existing sessions automatically
+    // onConflict: device_fingerprint - updates if exists, inserts if not
     const { data, error } = await supabase
       .from("user_sessions")
-      .insert({
-        user_id: userId,
-        device_fingerprint: fingerprint,
-        device_name: getDeviceName(),
-        device_type: getDeviceType(),
-        ip_address: ipAddress,
-        user_agent: navigator.userAgent,
-      })
+      .upsert(
+        {
+          user_id: userId,
+          device_fingerprint: fingerprint,
+          device_name: getDeviceName(),
+          device_type: getDeviceType(),
+          ip_address: ipAddress,
+          user_agent: navigator.userAgent,
+          last_activity: new Date().toISOString(),
+        },
+        { onConflict: "device_fingerprint" }
+      )
       .select()
       .single();
 
