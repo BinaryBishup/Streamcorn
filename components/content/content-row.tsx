@@ -74,7 +74,7 @@ const ContentRowComponent = ({ title, items, onItemClick }: ContentRowProps) => 
       <div
         ref={scrollContainerRef}
         onScroll={handleScroll}
-        className="flex gap-2 overflow-x-auto overflow-y-visible scrollbar-hide px-4 md:px-16 scroll-smooth py-6"
+        className="flex gap-2 overflow-x-auto overflow-y-visible scrollbar-hide px-4 md:px-16 scroll-smooth py-10"
       >
         {items.map((item, index) => (
           <div

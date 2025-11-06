@@ -306,7 +306,7 @@ function HomePageContent() {
         )}
 
         {/* Content Rows */}
-        <div className="relative bg-black pt-4 pb-8">
+        <div className="relative bg-black pt-4 pb-8 overflow-y-visible">
           {/* Continue Watching */}
           {continueWatching.length > 0 && (
             <ContinueWatchingRow
