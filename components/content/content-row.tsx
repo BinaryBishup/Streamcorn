@@ -52,7 +52,7 @@ const ContentRowComponent = ({ title, items, onItemClick }: ContentRowProps) => 
   if (items.length === 0) return null;
 
   return (
-    <div className="relative group mb-8">
+    <div className="relative group mb-4">
       {/* Section Title */}
       <h2 className="text-xl md:text-2xl font-semibold text-white mb-2 px-4 md:px-16">
         {title}
@@ -74,7 +74,7 @@ const ContentRowComponent = ({ title, items, onItemClick }: ContentRowProps) => 
       <div
         ref={scrollContainerRef}
         onScroll={handleScroll}
-        className="flex gap-2 overflow-x-auto overflow-y-visible scrollbar-hide px-4 md:px-16 scroll-smooth py-12"
+        className="flex gap-2 overflow-x-auto overflow-y-visible scrollbar-hide px-4 md:px-16 scroll-smooth py-6"
       >
         {items.map((item, index) => (
           <div
