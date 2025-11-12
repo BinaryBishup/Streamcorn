@@ -101,12 +101,11 @@ function PlayerContent() {
   const [autoPlayCountdown, setAutoPlayCountdown] = useState<number | null>(null);
   const [showAutoPlayOverlay, setShowAutoPlayOverlay] = useState(false);
   const [completionThreshold, setCompletionThreshold] = useState<number | null>(null);
-  const [thumbnailPreview, setThumbnailPreview] = useState<{
+  const [timePreview, setTimePreview] = useState<{
     show: boolean;
     time: number;
     position: number;
-    thumbnail: string | null;
-  }>({ show: false, time: 0, position: 0, thumbnail: null });
+  }>({ show: false, time: 0, position: 0 });
 
   const videoRef = useRef<HTMLVideoElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
@@ -116,7 +115,6 @@ function PlayerContent() {
   const nextEpisodeHoverTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const currentEpisodeRef = useRef<HTMLDivElement>(null);
   const autoPlayCountdownRef = useRef<NodeJS.Timeout | null>(null);
-  const thumbnailCanvasRef = useRef<HTMLCanvasElement | null>(null);
   const progressBarRef = useRef<HTMLDivElement>(null);
 
   const profileId = searchParams.get("profile_id");
@@ -1122,87 +1120,25 @@ function PlayerContent() {
     return `${m}:${s.toString().padStart(2, "0")}`;
   };
 
-  // Generate thumbnail at specific time
-  const generateThumbnail = async (time: number): Promise<string | null> => {
-    if (!videoRef.current || !videoUrl) return null;
-
-    try {
-      // Create canvas if it doesn't exist
-      if (!thumbnailCanvasRef.current) {
-        thumbnailCanvasRef.current = document.createElement('canvas');
-        thumbnailCanvasRef.current.width = 160;
-        thumbnailCanvasRef.current.height = 90;
-      }
-
-      const canvas = thumbnailCanvasRef.current;
-      const ctx = canvas.getContext('2d');
-      if (!ctx) return null;
-
-      // Create a temporary video element to seek to specific time
-      return new Promise((resolve) => {
-        const tempVideo = document.createElement('video');
-        tempVideo.preload = 'metadata';
-        tempVideo.muted = true;
-        tempVideo.crossOrigin = 'anonymous';
-
-        // Use the same video source
-        if (hlsRef.current && videoRef.current) {
-          // For HLS, we'll use the current video frame as a fallback
-          // since creating a new HLS instance would be expensive
-          ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-          resolve(canvas.toDataURL('image/jpeg', 0.7));
-        } else if (videoUrl) {
-          tempVideo.src = videoUrl;
-
-          const onSeeked = () => {
-            ctx.drawImage(tempVideo, 0, 0, canvas.width, canvas.height);
-            const thumbnail = canvas.toDataURL('image/jpeg', 0.7);
-            tempVideo.remove();
-            resolve(thumbnail);
-          };
-
-          const onError = () => {
-            tempVideo.remove();
-            resolve(null);
-          };
-
-          tempVideo.addEventListener('seeked', onSeeked, { once: true });
-          tempVideo.addEventListener('error', onError, { once: true });
-
-          tempVideo.currentTime = time;
-        } else {
-          resolve(null);
-        }
-      });
-    } catch (error) {
-      console.error('Error generating thumbnail:', error);
-      return null;
-    }
-  };
-
-  // Handle seek bar hover
-  const handleProgressHover = async (e: React.MouseEvent<HTMLDivElement>) => {
-    if (!progressBarRef.current || !videoRef.current || !duration) return;
+  // Handle seek bar hover - show time preview
+  const handleProgressHover = (e: React.MouseEvent<HTMLDivElement>) => {
+    if (!progressBarRef.current || !duration) return;
 
     const bounds = progressBarRef.current.getBoundingClientRect();
     const percent = Math.max(0, Math.min(1, (e.clientX - bounds.left) / bounds.width));
     const time = percent * duration;
     const position = e.clientX - bounds.left;
 
-    // Generate thumbnail for this position
-    const thumbnail = await generateThumbnail(time);
-
-    setThumbnailPreview({
+    setTimePreview({
       show: true,
       time,
       position,
-      thumbnail,
     });
   };
 
   // Handle seek bar leave
   const handleProgressLeave = () => {
-    setThumbnailPreview({ show: false, time: 0, position: 0, thumbnail: null });
+    setTimePreview({ show: false, time: 0, position: 0 });
   };
 
   if (loading) {
@@ -1349,35 +1285,22 @@ function PlayerContent() {
       >
         {/* Progress Bar */}
         <div className="mb-4 relative">
-          {/* Thumbnail Preview */}
-          {thumbnailPreview.show && (
+          {/* Time Preview Tooltip */}
+          {timePreview.show && (
             <div
               className="absolute bottom-full mb-2 pointer-events-none z-50"
               style={{
-                left: `${thumbnailPreview.position}px`,
+                left: `${timePreview.position}px`,
                 transform: 'translateX(-50%)',
               }}
             >
-              <div className="bg-black/90 backdrop-blur-sm rounded-lg overflow-hidden shadow-2xl border border-white/20">
-                {thumbnailPreview.thumbnail ? (
-                  <img
-                    src={thumbnailPreview.thumbnail}
-                    alt="Preview"
-                    className="w-40 h-[90px] object-cover"
-                  />
-                ) : (
-                  <div className="w-40 h-[90px] flex items-center justify-center bg-gray-800">
-                    <span className="text-gray-400 text-xs">Loading...</span>
-                  </div>
-                )}
-                <div className="px-2 py-1 text-center">
-                  <span className="text-white text-xs font-medium">
-                    {formatTime(thumbnailPreview.time)}
-                  </span>
-                </div>
+              <div className="bg-black/90 backdrop-blur-sm rounded px-3 py-1.5 shadow-lg border border-white/20">
+                <span className="text-white text-sm font-medium whitespace-nowrap">
+                  {formatTime(timePreview.time)}
+                </span>
               </div>
               {/* Arrow pointing down */}
-              <div className="absolute left-1/2 -translate-x-1/2 top-full w-0 h-0 border-l-4 border-r-4 border-t-4 border-l-transparent border-r-transparent border-t-black/90"></div>
+              <div className="absolute left-1/2 -translate-x-1/2 top-full w-0 h-0 border-l-[6px] border-r-[6px] border-t-[6px] border-l-transparent border-r-transparent border-t-black/90"></div>
             </div>
           )}
 
