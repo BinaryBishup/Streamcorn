@@ -23,9 +23,6 @@ import {
 import { Button } from "@/components/ui/button";
 import { fetchTVShowDetails, fetchSeasonDetails, fetchEpisodeDetails, getTMDBImageUrl } from "@/lib/tmdb";
 import Image from "next/image";
-import { useSubscription } from "@/contexts/subscription-context";
-import { getAvailableQualities, getRequiredPlanForQuality, type VideoQuality } from "@/lib/subscription";
-import { UpgradeDrawer } from "@/components/subscription/upgrade-drawer";
 
 interface ContentData {
   id: string;
@@ -64,27 +61,20 @@ function PlayerContent() {
   const router = useRouter();
   const searchParams = useSearchParams();
   const supabase = createClient();
-  const { plan, subscription } = useSubscription();
 
   const [loading, setLoading] = useState(true);
   const [content, setContent] = useState<ContentData | null>(null);
   const [episode, setEpisode] = useState<EpisodeData | null>(null);
   const [seasonData, setSeasonData] = useState<SeasonData | null>(null);
   const [videoUrl, setVideoUrl] = useState<string | null>(null);
-  const [availableQualities, setAvailableQualities] = useState<string[]>([]);
   const [availableAudioTracks, setAvailableAudioTracks] = useState<string[]>([]);
   const [availableSubtitles, setAvailableSubtitles] = useState<string[]>([]);
-  const [selectedQuality, setSelectedQuality] = useState<number>(-1);
   const [selectedAudio, setSelectedAudio] = useState<number>(-1);
   const [selectedSubtitle, setSelectedSubtitle] = useState<number>(-1);
   const [showEpisodes, setShowEpisodes] = useState(false);
   const [showAudioSubtitlesMenu, setShowAudioSubtitlesMenu] = useState(false);
-  const [showQualityMenu, setShowQualityMenu] = useState(false);
-  const [showUpgradeDrawer, setShowUpgradeDrawer] = useState(false);
-  const [requiredPlanForUpgrade, setRequiredPlanForUpgrade] = useState<"basic" | "premium" | "ultra" | undefined>();
   const [keyboardFeedback, setKeyboardFeedback] = useState<{ icon: React.ReactNode; text?: string } | null>(null);
   const [volumeHovered, setVolumeHovered] = useState(false);
-  const [currentQualityLabel, setCurrentQualityLabel] = useState<string>("Auto");
   const [allEpisodes, setAllEpisodes] = useState<TMDBEpisode[]>([]);
   const [episodeProgress, setEpisodeProgress] = useState<Map<string, number>>(new Map());
   const [currentSeason, setCurrentSeason] = useState<number>(1);
@@ -179,13 +169,6 @@ function PlayerContent() {
       hls.attachMedia(video);
 
       hls.on(Hls.Events.MANIFEST_PARSED, () => {
-        // Get available quality levels
-        const levels = hls.levels.map((level, index) =>
-          `${level.height}p (${Math.round(level.bitrate / 1000)}kbps)`
-        );
-        setAvailableQualities(["Auto", ...levels]);
-        setSelectedQuality(hls.currentLevel + 1); // +1 because "Auto" is at index 0
-
         // Get available audio tracks
         const audioTracks = hls.audioTracks.map(track => track.name || track.lang || `Track ${track.id}`);
         setAvailableAudioTracks(audioTracks);
@@ -441,12 +424,10 @@ function PlayerContent() {
   useEffect(() => {
     const handleKeyDown = (e: KeyboardEvent) => {
       // Don't trigger shortcuts if menus or episodes sidebar is open
-      if (showAudioSubtitlesMenu || showQualityMenu || showEpisodes || showUpgradeDrawer) {
+      if (showAudioSubtitlesMenu || showEpisodes) {
         if (e.key === "Escape") {
           setShowAudioSubtitlesMenu(false);
-          setShowQualityMenu(false);
           setShowEpisodes(false);
-          setShowUpgradeDrawer(false);
         }
         return;
       }
@@ -551,7 +532,7 @@ function PlayerContent() {
 
     window.addEventListener("keydown", handleKeyDown);
     return () => window.removeEventListener("keydown", handleKeyDown);
-  }, [playing, volume, muted, showAudioSubtitlesMenu, showQualityMenu, showEpisodes, showUpgradeDrawer, isFullscreen]);
+  }, [playing, volume, muted, showAudioSubtitlesMenu, showEpisodes, isFullscreen]);
 
   const loadPlayerData = async () => {
     try {
@@ -1141,9 +1122,9 @@ function PlayerContent() {
     return `${m}:${s.toString().padStart(2, "0")}`;
   };
 
-  // Generate thumbnail at specific time - simplified for HLS streams
+  // Generate thumbnail at specific time
   const generateThumbnail = async (time: number): Promise<string | null> => {
-    if (!videoRef.current) return null;
+    if (!videoRef.current || !videoUrl) return null;
 
     try {
       // Create canvas if it doesn't exist
@@ -1157,10 +1138,42 @@ function PlayerContent() {
       const ctx = canvas.getContext('2d');
       if (!ctx) return null;
 
-      // For HLS streams, we'll capture from the current video frame
-      // In production, thumbnails should be pre-generated server-side
-      ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
-      return canvas.toDataURL('image/jpeg', 0.7);
+      // Create a temporary video element to seek to specific time
+      return new Promise((resolve) => {
+        const tempVideo = document.createElement('video');
+        tempVideo.preload = 'metadata';
+        tempVideo.muted = true;
+        tempVideo.crossOrigin = 'anonymous';
+
+        // Use the same video source
+        if (hlsRef.current && videoRef.current) {
+          // For HLS, we'll use the current video frame as a fallback
+          // since creating a new HLS instance would be expensive
+          ctx.drawImage(videoRef.current, 0, 0, canvas.width, canvas.height);
+          resolve(canvas.toDataURL('image/jpeg', 0.7));
+        } else if (videoUrl) {
+          tempVideo.src = videoUrl;
+
+          const onSeeked = () => {
+            ctx.drawImage(tempVideo, 0, 0, canvas.width, canvas.height);
+            const thumbnail = canvas.toDataURL('image/jpeg', 0.7);
+            tempVideo.remove();
+            resolve(thumbnail);
+          };
+
+          const onError = () => {
+            tempVideo.remove();
+            resolve(null);
+          };
+
+          tempVideo.addEventListener('seeked', onSeeked, { once: true });
+          tempVideo.addEventListener('error', onError, { once: true });
+
+          tempVideo.currentTime = time;
+        } else {
+          resolve(null);
+        }
+      });
     } catch (error) {
       console.error('Error generating thumbnail:', error);
       return null;
@@ -1774,94 +1787,6 @@ function PlayerContent() {
                 </div>
               )}
 
-            {/* Quality - Hidden on mobile */}
-            <button
-              onClick={() => setShowQualityMenu(!showQualityMenu)}
-              className="player-control-btn touch-optimized hidden md:block text-white hover:text-gray-300 transition-all duration-200 hover:scale-110 md:hover:scale-125 active:scale-95"
-              title="Quality"
-            >
-              <div className="px-2 py-1 md:px-3 md:py-2 bg-black/50 backdrop-blur-sm rounded border border-white/30 text-xs md:text-sm font-bold">
-                {currentQualityLabel}
-              </div>
-            </button>
-
-            {/* Quality Menu - Centered */}
-            {showQualityMenu && (
-              <div
-                className="fixed inset-0 bg-black/70 z-50 flex items-center justify-center p-4"
-                onClick={() => setShowQualityMenu(false)}
-              >
-                <div
-                  className="bg-[#181818] rounded-lg w-full max-w-md max-h-[500px] overflow-hidden shadow-2xl border border-gray-700"
-                  onClick={(e) => e.stopPropagation()}
-                >
-                    <div className="flex items-center justify-between p-4 border-b border-gray-800">
-                      <h2 className="text-white text-lg font-semibold">Quality</h2>
-                      <button
-                        onClick={() => setShowQualityMenu(false)}
-                        className="text-gray-400 hover:text-white transition-colors"
-                      >
-                        <X className="w-5 h-5" />
-                      </button>
-                    </div>
-                    <div className="p-4 overflow-y-auto max-h-[400px] space-y-1">
-                      {getAvailableQualities(plan).map((qualityOption, index) => {
-                        const isLocked = qualityOption.locked;
-                        const requiredPlan = isLocked ? getRequiredPlanForQuality(qualityOption.value) : null;
-
-                        return (
-                          <button
-                            key={index}
-                            onClick={() => {
-                              if (isLocked && requiredPlan) {
-                                setRequiredPlanForUpgrade(requiredPlan);
-                                setShowUpgradeDrawer(true);
-                                setShowQualityMenu(false);
-                              } else if (hlsRef.current && index > 0) {
-                                hlsRef.current.currentLevel = index - 1;
-                                setSelectedQuality(index);
-                                // Update quality label (extract just the quality part like "HD", "SD", "FHD")
-                                const labelMatch = qualityOption.value.match(/(\d+)p/);
-                                if (labelMatch) {
-                                  const quality = parseInt(labelMatch[1]);
-                                  if (quality >= 1080) setCurrentQualityLabel("FHD");
-                                  else if (quality >= 720) setCurrentQualityLabel("HD");
-                                  else setCurrentQualityLabel("SD");
-                                }
-                              } else if (index === 0) {
-                                // Auto quality
-                                if (hlsRef.current) {
-                                  hlsRef.current.currentLevel = -1;
-                                  setSelectedQuality(0);
-                                  setCurrentQualityLabel("Auto");
-                                }
-                              }
-                            }}
-                            className={`w-full flex items-center justify-between p-3 rounded-lg transition-colors ${
-                              isLocked ? 'opacity-60' : 'hover:bg-gray-800/50'
-                            }`}
-                          >
-                            <div className="flex items-center gap-3">
-                              <span className="text-white text-sm">{qualityOption.label}</span>
-                              {isLocked && (
-                                <Lock className="w-4 h-4 text-yellow-500" />
-                              )}
-                            </div>
-                            {!isLocked && selectedQuality === index && (
-                              <Check className="w-4 h-4 text-white" />
-                            )}
-                            {isLocked && (
-                              <span className="text-xs text-yellow-500 font-medium">
-                                Upgrade Required
-                              </span>
-                            )}
-                          </button>
-                        );
-                      })}
-                    </div>
-                  </div>
-                </div>
-              )}
 
             {/* Fullscreen */}
             <button
@@ -1958,14 +1883,6 @@ function PlayerContent() {
           </div>
         </div>
       )}
-
-      {/* Upgrade Drawer */}
-      <UpgradeDrawer
-        isOpen={showUpgradeDrawer}
-        onClose={() => setShowUpgradeDrawer(false)}
-        currentPlan={plan}
-        requiredPlan={requiredPlanForUpgrade}
-      />
     </div>
   );
 }
