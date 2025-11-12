@@ -26,6 +26,7 @@ import Image from "next/image";
 import { useSubscription } from "@/contexts/subscription-context";
 import { getAvailableQualities, getRequiredPlanForQuality, type VideoQuality } from "@/lib/subscription";
 import { UpgradeDrawer } from "@/components/subscription/upgrade-drawer";
+import { MobileRedirect } from "@/components/mobile-redirect";
 
 interface ContentData {
   id: string;
@@ -1212,15 +1213,17 @@ function PlayerContent() {
   }
 
   return (
-    <div
-      ref={containerRef}
-      className="video-player-container relative w-full h-screen bg-black overflow-hidden touch-none"
-    >
-      {/* Video Element */}
-      <video
-        ref={videoRef}
-        className="w-full h-full object-contain"
-        onTimeUpdate={handleTimeUpdate}
+    <>
+      <MobileRedirect />
+      <div
+        ref={containerRef}
+        className="relative w-full h-screen bg-black overflow-hidden"
+      >
+        {/* Video Element */}
+        <video
+          ref={videoRef}
+          className="w-full h-full object-contain"
+          onTimeUpdate={handleTimeUpdate}
         onLoadedMetadata={handleLoadedMetadata}
         onPlay={() => setPlaying(true)}
         onPause={() => setPlaying(false)}
@@ -1330,16 +1333,16 @@ function PlayerContent() {
 
       {/* Bottom Controls */}
       <div
-        className={`player-controls player-safe-area absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black via-black/60 to-transparent pt-12 md:pt-20 lg:pt-24 pb-2 md:pb-3 lg:pb-4 px-3 md:px-6 lg:px-12 transition-opacity duration-300 ${
+        className={`absolute bottom-0 left-0 right-0 bg-gradient-to-t from-black via-black/60 to-transparent pt-24 pb-4 px-12 transition-opacity duration-300 ${
           showControls ? "opacity-100" : "opacity-0"
         }`}
       >
         {/* Progress Bar */}
-        <div className="mb-2 md:mb-3 lg:mb-4 relative">
-          {/* Thumbnail Preview - Hidden on mobile */}
+        <div className="mb-4 relative">
+          {/* Thumbnail Preview */}
           {thumbnailPreview.show && (
             <div
-              className="hidden md:block absolute bottom-full mb-2 pointer-events-none z-50"
+              className="absolute bottom-full mb-2 pointer-events-none z-50"
               style={{
                 left: `${thumbnailPreview.position}px`,
                 transform: 'translateX(-50%)',
@@ -1350,10 +1353,10 @@ function PlayerContent() {
                   <img
                     src={thumbnailPreview.thumbnail}
                     alt="Preview"
-                    className="w-32 md:w-40 h-[72px] md:h-[90px] object-cover"
+                    className="w-40 h-[90px] object-cover"
                   />
                 ) : (
-                  <div className="w-32 md:w-40 h-[72px] md:h-[90px] flex items-center justify-center bg-gray-800">
+                  <div className="w-40 h-[90px] flex items-center justify-center bg-gray-800">
                     <span className="text-gray-400 text-xs">Loading...</span>
                   </div>
                 )}
@@ -1371,11 +1374,9 @@ function PlayerContent() {
           <div
             ref={progressBarRef}
             onClick={handleProgressClick}
-            onTouchStart={handleProgressTouch}
-            onTouchMove={handleProgressTouch}
             onMouseMove={handleProgressHover}
             onMouseLeave={handleProgressLeave}
-            className="group relative w-full h-1 md:h-1 bg-gray-600 rounded-full cursor-pointer hover:h-2 active:h-2 transition-all duration-200 touch-none"
+            className="group relative w-full h-1 bg-gray-600 rounded-full cursor-pointer hover:h-2 transition-all duration-200"
           >
             {/* Buffered */}
             <div
@@ -1969,6 +1970,7 @@ function PlayerContent() {
         requiredPlan={requiredPlanForUpgrade}
       />
     </div>
+    </>
   );
 }
 
