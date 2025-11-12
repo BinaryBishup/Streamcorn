@@ -26,7 +26,6 @@ import Image from "next/image";
 import { useSubscription } from "@/contexts/subscription-context";
 import { getAvailableQualities, getRequiredPlanForQuality, type VideoQuality } from "@/lib/subscription";
 import { UpgradeDrawer } from "@/components/subscription/upgrade-drawer";
-import { MobileRedirect } from "@/components/mobile-redirect";
 
 interface ContentData {
   id: string;
@@ -1213,17 +1212,15 @@ function PlayerContent() {
   }
 
   return (
-    <>
-      <MobileRedirect />
-      <div
-        ref={containerRef}
-        className="relative w-full h-screen bg-black overflow-hidden"
-      >
-        {/* Video Element */}
-        <video
-          ref={videoRef}
-          className="w-full h-full object-contain"
-          onTimeUpdate={handleTimeUpdate}
+    <div
+      ref={containerRef}
+      className="relative w-full h-screen bg-black overflow-hidden"
+    >
+      {/* Video Element */}
+      <video
+        ref={videoRef}
+        className="w-full h-full object-contain"
+        onTimeUpdate={handleTimeUpdate}
         onLoadedMetadata={handleLoadedMetadata}
         onPlay={() => setPlaying(true)}
         onPause={() => setPlaying(false)}
@@ -1970,7 +1967,6 @@ function PlayerContent() {
         requiredPlan={requiredPlanForUpgrade}
       />
     </div>
-    </>
   );
 }
 
